@@ -183,6 +183,17 @@ export interface FileDeletion {
  * `"user:{uuid}"`. The client turns it into a route; the server deliberately does not, because URLs
  * are the web app's business.
  */
+/**
+ * One option in the notifications filter, as the server offers it.
+ *
+ * <p>Role-aware: the list a member gets is not the list an admin gets, because a member is never
+ * sent a registration request in the first place.
+ */
+export interface NotificationCategoryOption {
+  id: string;
+  label: string;
+}
+
 export interface Notification {
   id: string;
   type: string;

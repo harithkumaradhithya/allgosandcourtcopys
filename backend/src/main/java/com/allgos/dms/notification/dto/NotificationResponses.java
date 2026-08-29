@@ -35,6 +35,15 @@ public final class NotificationResponses {
         }
     }
 
+    /**
+     * One option in the notifications screen's category filter.
+     *
+     * <p>The id is what goes back on the query string; the label is what the reader sees. Only the
+     * categories a reader in that role can actually receive are returned — a member is never
+     * offered "Registration requests", which for them could only ever match nothing.
+     */
+    public record CategoryOption(String id, String label) {}
+
     /** What the bell badge needs, and nothing else — it is polled far more often than the list. */
     public record UnreadCount(long unread) {}
 

@@ -5,8 +5,10 @@ import com.allgos.dms.audit.repository.AuditLogRepository;
 import com.allgos.dms.audit.service.AuditService;
 import com.allgos.dms.common.dto.PageResponse;
 import com.allgos.dms.common.exception.ApiException;
+import com.allgos.dms.notification.dto.NotificationResponses.CategoryOption;
 import com.allgos.dms.notification.dto.NotificationResponses.NotificationView;
 import com.allgos.dms.notification.entity.Notification;
+import com.allgos.dms.notification.entity.NotificationCategory;
 import com.allgos.dms.notification.entity.NotificationType;
 import com.allgos.dms.notification.repository.NotificationRepository;
 import com.allgos.dms.user.entity.User;
@@ -17,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +31,9 @@ public class NotificationService {
 
     /** How long one person must wait between announcements. */
     private static final Duration COOLDOWN = Duration.ofMinutes(1);
+
+    /** Stands in for the type list when no category is chosen; the query never looks at it. */
+    private static final Set<String> PLACEHOLDER_TYPES = Set.of("");
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
@@ -212,14 +218,36 @@ public class NotificationService {
      * of parameters that returns somebody else's.
      *
      * @param unreadOnly the "Unread" filter on the notifications screen
+     * @param categories the groups the reader ticked; empty means everything, and a category the
+     *     reader can never receive is simply a filter that matches nothing rather than an error
      */
     @Transactional(readOnly = true)
-    public PageResponse<NotificationView> list(User user, boolean unreadOnly, Pageable pageable) {
-        Page<Notification> page = unreadOnly
-                ? notificationRepository.findByUserIdAndReadFalseOrderByCreatedAtDesc(user.getId(), pageable)
-                : notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable);
+    public PageResponse<NotificationView> list(
+            User user, boolean unreadOnly, List<NotificationCategory> categories, Pageable pageable) {
+
+        Set<String> types = NotificationCategory.typesOf(categories);
+        Page<Notification> page = notificationRepository.search(
+                user.getId(),
+                unreadOnly,
+                types.isEmpty(),
+                // Never read when allTypes is true, but an empty `in ()` is not valid SQL.
+                types.isEmpty() ? PLACEHOLDER_TYPES : types,
+                pageable);
 
         return PageResponse.of(page, NotificationView::from);
+    }
+
+    /**
+     * The filter options this reader should be offered.
+     *
+     * <p>Answered by the server rather than hard-coded in the web app for the same reason the list
+     * of audit actions is: the categories and the types they cover are defined once, here, and a
+     * screen that restated them would drift the first time a notification type was added.
+     */
+    public List<CategoryOption> categoriesFor(User user) {
+        return NotificationCategory.visibleTo(user.getRole() == UserRole.ADMIN).stream()
+                .map(category -> new CategoryOption(category.wireName(), category.label()))
+                .toList();
     }
 
     /**

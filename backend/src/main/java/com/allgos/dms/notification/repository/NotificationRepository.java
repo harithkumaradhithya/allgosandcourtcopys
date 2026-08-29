@@ -1,6 +1,7 @@
 package com.allgos.dms.notification.repository;
 
 import com.allgos.dms.notification.entity.Notification;
+import java.util.Collection;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,31 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     /** The "Unread" filter on the notifications screen. */
     Page<Notification> findByUserIdAndReadFalseOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
+    /**
+     * The notifications screen, with its filters applied in the database.
+     *
+     * <p>Both filters are optional and both are applied here rather than to the page that comes
+     * back. Filtering a fetched page would only ever search the twenty rows already on screen,
+     * which is the opposite of what somebody hunting for one notification from last month needs.
+     *
+     * <p>{@code allTypes} carries the "no category chosen" case instead of a null collection: an
+     * empty {@code in ()} is not valid SQL, so the flag short-circuits the clause and the callers
+     * pass a placeholder collection that is never read.
+     */
+    @Query("""
+            select n from Notification n
+            where n.user.id = :userId
+              and (:unreadOnly = false or n.read = false)
+              and (:allTypes = true or n.type in :types)
+            order by n.createdAt desc
+            """)
+    Page<Notification> search(
+            @Param("userId") UUID userId,
+            @Param("unreadOnly") boolean unreadOnly,
+            @Param("allTypes") boolean allTypes,
+            @Param("types") Collection<String> types,
+            Pageable pageable);
 
     /** The unread badge on the notification bell. */
     long countByUserIdAndReadFalse(UUID userId);

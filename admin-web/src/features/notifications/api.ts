@@ -1,5 +1,5 @@
 import { api } from '@/lib/api';
-import type { Notification, PageResponse } from '@/types/api';
+import type { Notification, NotificationCategoryOption, PageResponse } from '@/types/api';
 
 /**
  * The caller's own notifications. There is no endpoint for anybody else's — an admin who wants to
@@ -9,11 +9,33 @@ import type { Notification, PageResponse } from '@/types/api';
 
 export async function fetchNotifications(
   unreadOnly: boolean,
+  categories: string[] = [],
   page = 0,
 ): Promise<PageResponse<Notification>> {
-  const { data } = await api.get<PageResponse<Notification>>('/notifications', {
-    params: { unread: unreadOnly, page },
-  });
+  /*
+   * Built by hand rather than handed to axios as an array: axios would serialise one as
+   * `category[]=uploads`, and Spring binds a repeated `category=uploads&category=deletions`.
+   * The filter is applied in the database, not to the page that comes back — filtering here
+   * would only ever search the twenty rows already on screen.
+   */
+  const params = new URLSearchParams();
+  params.set('unread', String(unreadOnly));
+  params.set('page', String(page));
+  categories.forEach((category) => params.append('category', category));
+
+  const { data } = await api.get<PageResponse<Notification>>('/notifications', { params });
+  return data;
+}
+
+/**
+ * The filter options for whoever is signed in.
+ *
+ * <p>Asked of the server rather than listed in this file, so the categories and the notification
+ * types they cover are defined once. It is also what keeps the options honest per role: a member
+ * is never offered "Registration requests", which only administrators are ever sent.
+ */
+export async function fetchNotificationCategories(): Promise<NotificationCategoryOption[]> {
+  const { data } = await api.get<NotificationCategoryOption[]>('/notifications/categories');
   return data;
 }
 

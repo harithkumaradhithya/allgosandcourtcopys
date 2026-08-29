@@ -460,6 +460,72 @@ class DocumentDiscoveryIT extends AbstractStorageIntegrationTest {
     }
 
     @Test
+    @DisplayName("the category filter narrows the list, and the options offered depend on the role")
+    void notificationsCanBeFilteredByCategory() throws Exception {
+        // Two real events of different kinds, both landing in the admin's inbox: an upload by the
+        // member, then the member deleting it again. The slate is cleared first so the setUp
+        // registration is not counted among them.
+        notificationRepository.deleteAll();
+        UUID fileId = uploadOne(folderId, memberToken, "Circular 44.pdf");
+        deleteFile(fileId, "Filed in the wrong department", memberToken).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/notifications")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$.totalItems").value(2));
+
+        mockMvc.perform(get("/api/v1/notifications").param("category", "deletions")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].type").value("file_deleted"));
+
+        mockMvc.perform(get("/api/v1/notifications").param("category", "uploads")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].type").value("file_uploaded"));
+
+        // Two categories widen the list rather than narrowing it to their intersection.
+        mockMvc.perform(get("/api/v1/notifications")
+                        .param("category", "uploads")
+                        .param("category", "deletions")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$.totalItems").value(2));
+
+        // A category nobody has been sent anything in is an empty list, not an error.
+        mockMvc.perform(get("/api/v1/notifications").param("category", "announcements")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(0));
+
+        // A stale bookmark carrying a category that no longer exists shows the whole list.
+        mockMvc.perform(get("/api/v1/notifications").param("category", "not-a-category")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(2));
+
+        // The filters are combinable: unread deletions only.
+        mockMvc.perform(get("/api/v1/notifications")
+                        .param("category", "deletions")
+                        .param("unread", "true")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(jsonPath("$.totalItems").value(1));
+
+        // Registration requests are only ever sent to admins, so only an admin is offered the
+        // filter for them. Everything else is offered to both.
+        mockMvc.perform(get("/api/v1/notifications/categories")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == 'registrations')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.id == 'deletions')]").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/notifications/categories")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == 'registrations')]").isEmpty())
+                .andExpect(jsonPath("$[?(@.id == 'deletions')]").isNotEmpty());
+    }
+
+    @Test
     @DisplayName("read-all clears the badge in one call")
     void readAllClearsEverythingUnread() throws Exception {
         // As above: the registration in setUp and the two uploads all notify legitimately, and

@@ -4,10 +4,14 @@ import com.allgos.dms.common.dto.PageResponse;
 import com.allgos.dms.common.security.AuthenticatedUser;
 import com.allgos.dms.notification.dto.NotificationRequests;
 import com.allgos.dms.notification.dto.NotificationResponses.AnnouncementSent;
+import com.allgos.dms.notification.dto.NotificationResponses.CategoryOption;
 import com.allgos.dms.notification.dto.NotificationResponses.NotificationView;
 import com.allgos.dms.notification.dto.NotificationResponses.UnreadCount;
+import com.allgos.dms.notification.entity.NotificationCategory;
 import com.allgos.dms.notification.service.NotificationService;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,14 +45,27 @@ public class NotificationController {
         this.notificationService = notificationService;
     }
 
+    /**
+     * @param category zero or more category ids, repeated — {@code ?category=deletions&category=uploads}.
+     *     Anything unrecognised is dropped rather than rejected, so a stale bookmark shows the
+     *     whole list instead of an error.
+     */
     @GetMapping
     public PageResponse<NotificationView> list(
             @RequestParam(defaultValue = "false") boolean unread,
+            @RequestParam(required = false) List<String> category,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal AuthenticatedUser principal) {
 
-        return notificationService.list(principal.user(), unread, pageable(page, size));
+        return notificationService.list(
+                principal.user(), unread, parseCategories(category), pageable(page, size));
+    }
+
+    /** The filter options for whoever is asking — see {@code NotificationService#categoriesFor}. */
+    @GetMapping("/categories")
+    public List<CategoryOption> categories(@AuthenticationPrincipal AuthenticatedUser principal) {
+        return notificationService.categoriesFor(principal.user());
     }
 
     /**
@@ -98,6 +115,17 @@ public class NotificationController {
      * Newest first. The repository methods already order, so no Sort is passed — adding one here
      * would append a second ORDER BY on top of theirs.
      */
+    private static List<NotificationCategory> parseCategories(List<String> requested) {
+        if (requested == null) {
+            return List.of();
+        }
+        return requested.stream()
+                .map(NotificationCategory::parse)
+                .flatMap(Optional::stream)
+                .distinct()
+                .toList();
+    }
+
     private Pageable pageable(int page, int size) {
         return PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE));
     }
