@@ -209,6 +209,18 @@ public class NotificationService {
                 "user:" + user.getId());
     }
 
+    /**
+     * Whether this exact thing has already been said about this exact subject.
+     *
+     * <p>For the notifications that can be arrived at from more than one direction — a duplicate
+     * pair is checked once from each copy — so the second arrival can fall silent rather than tell
+     * everybody twice.
+     */
+    @Transactional(readOnly = true)
+    public boolean alreadySentAbout(String type, String entityRef) {
+        return notificationRepository.existsByTypeAndEntityRef(type, entityRef);
+    }
+
     // -------------------------------------------------------------------- read side
 
     /**

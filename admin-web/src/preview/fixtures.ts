@@ -498,6 +498,19 @@ const ROUTES: [RegExp, (url: string) => unknown][] = [
           createdAt: '2026-08-14T06:10:00Z',
         },
         {
+          id: '77777777-7777-7777-7777-777777777774',
+          type: 'duplicate_upload',
+          title: 'A duplicate file has been uploaded',
+          body:
+            '"scan0007.pdf" (G.O. Ms. No. 123), uploaded at 14 Aug 2026, 11:02 am by Anitha Rao, is a '
+            + 'duplicate of "GO 123 scan.pdf" (G.O.Ms.No.123), uploaded at 12 Aug 2026, 9:41 am by '
+            + 'Ravi Kumar.\n\nMatched on: the same G.O. number (G.O. Ms. No. 123).\n'
+            + 'First copy: Revenue Department / General.\nRecent copy: Health Department / General.',
+          entityRef: `file:${FILE_ID}`,
+          read: false,
+          createdAt: '2026-08-14T05:32:00Z',
+        },
+        {
           id: '77777777-7777-7777-7777-777777777771',
           type: 'file_deleted',
           title: 'A document was deleted',

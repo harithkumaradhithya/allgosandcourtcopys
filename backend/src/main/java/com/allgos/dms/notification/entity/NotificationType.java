@@ -10,6 +10,14 @@ public final class NotificationType {
     /** Promoted to admin, or put back to member. Either way the person is signed out. */
     public static final String ROLE_CHANGED = "role_changed";
     public static final String FILE_UPLOADED = "file_uploaded";
+    /**
+     * A document was filed carrying a G.O. number some other live document already carries.
+     *
+     * <p>Administrators only: it is a housekeeping problem for whoever can merge or remove one of
+     * the two, and telling the whole office would be telling 150 people about a job none of them can
+     * do.
+     */
+    public static final String DUPLICATE_UPLOAD = "duplicate_upload";
     /** Somebody telling the office something. Carries no subject — the message is the point. */
     public static final String ANNOUNCEMENT = "announcement";
     /** Fanned out to every admin, carrying the reason the member gave. */

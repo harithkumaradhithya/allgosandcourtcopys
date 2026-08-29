@@ -24,6 +24,10 @@ import org.springframework.stereotype.Service;
  * <p>The bytes are re-read from object storage rather than carried over from the request. Holding a
  * 50 MB array per queued file would put a bulk import's worth of documents in the heap at once, and
  * the object is already there — writing it is what commits the row in the first place.
+ *
+ * <p>The duplicate check hangs off the back of this for the same reason it exists here at all: it
+ * compares the G.O. number, which does not exist until the extraction above has run. See
+ * {@link DuplicateUploadDetector}.
  */
 @Service
 public class DocumentEnrichmentService {
@@ -33,37 +37,62 @@ public class DocumentEnrichmentService {
     private final StorageService storageService;
     private final DocumentAbstractExtractor extractor;
     private final FileRecordWriter fileRecordWriter;
+    private final DuplicateUploadDetector duplicateDetector;
 
     public DocumentEnrichmentService(
             StorageService storageService,
             DocumentAbstractExtractor extractor,
-            FileRecordWriter fileRecordWriter) {
+            FileRecordWriter fileRecordWriter,
+            DuplicateUploadDetector duplicateDetector) {
         this.storageService = storageService;
         this.extractor = extractor;
         this.fileRecordWriter = fileRecordWriter;
+        this.duplicateDetector = duplicateDetector;
     }
 
     /**
-     * Queues one document to be read. Only PDFs carry the convention this looks for, so anything
-     * else is not queued at all.
+     * Queues the work that happens after an upload has been answered: reading what can be read out
+     * of the document, and then checking whether it is a copy of something already filed.
+     *
+     * <p>Everything is queued, not just PDFs. Only a PDF carries a G.O. number the extractor can
+     * read, so that part is skipped for anything else — but a photograph or a spreadsheet can still
+     * be the same document filed twice, and its file name is the only evidence of that there is. An
+     * early return here would have quietly meant "duplicates are a PDF feature".
      *
      * @param storageKey the key the row pointed at when it was written — checked again before the
      *     row is updated, so a replacement landing in the meantime is never overwritten with the
      *     superseded document's description
      */
     public void enrich(UUID fileId, String storageKey, String contentType) {
-        if (!"application/pdf".equals(contentType)) {
-            return;
-        }
-        enrichAsync(fileId, storageKey);
+        processAsync(fileId, storageKey, "application/pdf".equals(contentType));
     }
 
     /**
      * Public only because {@code @Async} is applied by a proxy, and a call to {@code this} from
      * {@link #enrich} would run on the caller's thread — the very thing this exists to avoid.
+     *
+     * @param readable whether the document is one the extractor can read a G.O. number out of
      */
     @Async("documentEnrichment")
-    public void enrichAsync(UUID fileId, String storageKey) {
+    public void processAsync(UUID fileId, String storageKey, boolean readable) {
+        if (readable) {
+            extract(fileId, storageKey);
+        }
+
+        // Outside the extraction and unconditional: whether or not a G.O. number was found, the
+        // document has a name, and a duplicate is worth reporting on that alone. Running it here
+        // rather than at the end of the extraction is also what keeps it to exactly one check per
+        // upload -- two would mean telling every administrator twice.
+        duplicateDetector.check(fileId);
+    }
+
+    /**
+     * Reads the document and writes what it found, or leaves the row alone.
+     *
+     * <p>Failures are swallowed: a document nobody can read a description out of is still a
+     * document, and the duplicate check that follows does not depend on this having worked.
+     */
+    private void extract(UUID fileId, String storageKey) {
         try {
             DocumentAbstractExtractor.Extraction extraction = extractor.extract(storageService.get(storageKey));
             if (extraction.description() == null && extraction.goNumber() == null) {
@@ -72,8 +101,7 @@ public class DocumentEnrichmentService {
             fileRecordWriter.applyEnrichment(
                     fileId, storageKey, extraction.description(), extraction.goNumber());
         } catch (RuntimeException ex) {
-            // A document nobody can read a description out of is still a document. This is the same
-            // best-effort contract the inline version had, just on another thread.
+            // This is the same best-effort contract the inline version had, just on another thread.
             log.warn("Could not enrich file {} from {}", fileId, storageKey, ex);
         }
     }

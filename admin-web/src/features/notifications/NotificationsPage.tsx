@@ -386,7 +386,12 @@ function NotificationRow({
           )}
         </span>
         {notification.body && (
-          <span className="mt-0.5 block text-sm text-slate-600">{notification.body}</span>
+          // `whitespace-pre-line`, because a duplicate report is written as a sentence and then the
+          // two locations on their own lines, and collapsing that runs them into one paragraph. The
+          // bodies that carry no line breaks are unaffected.
+          <span className="mt-0.5 block whitespace-pre-line text-sm text-slate-600">
+            {notification.body}
+          </span>
         )}
         <span className="mt-1 block text-xs text-slate-400">
           {formatDateTime(notification.createdAt)}
@@ -480,6 +485,9 @@ function CategoryChip({
 function categoryTone(id: string): ToneName {
   const tones: Record<string, ToneName> = {
     uploads: 'navy',
+    // Not an error and not a loss -- something filed twice, waiting for somebody to decide which
+    // copy stays. Amber is the colour the rest of the app gives that.
+    duplicates: 'amber',
     deletions: 'rose',
     restores: 'emerald',
     announcements: 'sky',
@@ -532,6 +540,7 @@ function toneFor(type: string): ToneName {
   if (type.includes('rejected') || type.includes('deleted') || type.includes('disabled')) return 'rose';
   if (type.includes('approved') || type.includes('restored')) return 'emerald';
   if (type.includes('submitted')) return 'gold';
+  if (type.includes('duplicate')) return 'amber';
   // A person speaking, rather than the system reporting — worth its own colour among the rest.
   if (type === 'announcement') return 'sky';
   return 'navy';
@@ -542,9 +551,15 @@ function Glyph({ type }: { type: string }) {
     type === 'announcement'
       ? // A speech bubble: somebody said this, as against the system reporting it.
         ['M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.3-.6L3 21l1.9-4.9A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z']
-      : type.includes('file') || type.includes('deleted') || type.includes('restored')
-        ? ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6']
-        : ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'];
+      : type.includes('duplicate')
+        ? // One page behind another: the same document in the system twice.
+          [
+            'M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z',
+            'M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2',
+          ]
+        : type.includes('file') || type.includes('deleted') || type.includes('restored')
+          ? ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6']
+          : ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'];
 
   return (
     <svg

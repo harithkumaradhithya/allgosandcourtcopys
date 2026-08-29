@@ -42,6 +42,15 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             @Param("types") Collection<String> types,
             Pageable pageable);
 
+    /**
+     * Whether anybody has already been told this exact thing about this exact subject.
+     *
+     * <p>What it exists for: two copies of one document are each checked for duplicates on their
+     * own, and without this the pair would be reported twice — once from each side. The report
+     * always points at the newer copy, so its {@code entityRef} is what identifies the pair.
+     */
+    boolean existsByTypeAndEntityRef(String type, String entityRef);
+
     /** The unread badge on the notification bell. */
     long countByUserIdAndReadFalse(UUID userId);
 

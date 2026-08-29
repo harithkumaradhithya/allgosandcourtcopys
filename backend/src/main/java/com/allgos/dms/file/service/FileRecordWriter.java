@@ -114,16 +114,22 @@ public class FileRecordWriter {
      * <p>Guarded on the storage key. Between the upload committing and the extraction finishing, the
      * document may have been replaced or deleted; in either case these values describe bytes the row
      * no longer points at, and writing them would put a stale description under a new document.
+     *
+     * @return whether the values were written. The duplicate check downstream reads the G.O. number
+     *     back out of the row, so it must not run when this was skipped — there would be nothing
+     *     there, or worse, the number belonging to whatever replaced the document.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void applyEnrichment(UUID fileId, String storageKey, String description, String goNumber) {
-        fileRepository
+    public boolean applyEnrichment(UUID fileId, String storageKey, String description, String goNumber) {
+        return fileRepository
                 .findByIdAndDeletedFalse(fileId)
                 .filter(file -> storageKey.equals(file.getStorageKey()))
-                .ifPresent(file -> {
+                .map(file -> {
                     file.setDescription(description);
                     file.setGoNumber(goNumber);
-                });
+                    return true;
+                })
+                .orElse(false);
     }
 
     /**

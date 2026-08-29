@@ -125,6 +125,78 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, UUID> {
             @Param("to") Instant to,
             Pageable pageable);
 
+    /**
+     * The oldest live document carrying the same G.O. number as {@code excludeId}, if there is one.
+     *
+     * <p>This is what a duplicate <em>is</em> in this office: the G.O. number is the reference the
+     * order was issued under, so two documents bearing one number are one order filed twice, whatever
+     * the two files happen to be named. Names are no use for the same reason — the same order arrives
+     * as "scan0001.pdf" from one desk and "GO 123 Revenue.pdf" from another.
+     *
+     * <p>Both sides are stripped to letters and digits before they are compared, so the punctuation
+     * and spacing a scan happens to produce cannot hide a match. {@code idx_files_go_number_normalised}
+     * is built on exactly this expression; changing the expression here without changing the index
+     * turns every upload into a table scan.
+     *
+     * <p><b>Oldest first</b>, not newest: the notification has to name the copy that was already
+     * there, and if a number has been filed three times the first one is the original in all three
+     * readings.
+     *
+     * <p>Soft-deleted rows are excluded. A document somebody has already withdrawn is not something
+     * an administrator needs to be sent to resolve.
+     */
+    @Query(
+            value =
+                    """
+                    select f.* from files f
+                    where f.is_deleted = false
+                      and f.id <> cast(:excludeId as uuid)
+                      and f.go_number is not null
+                      and regexp_replace(lower(f.go_number), '[^a-z0-9]', '', 'g') = :normalised
+                    order by f.created_at asc
+                    limit 1
+                    """,
+            nativeQuery = true)
+    Optional<StoredFile> findEarliestLiveWithNormalisedGoNumber(
+            @Param("normalised") String normalised, @Param("excludeId") String excludeId);
+
+    /**
+     * The oldest live document with the same file name as {@code excludeId}, if there is one.
+     *
+     * <p>The weaker of the two duplicate signals, and only consulted when the G.O. numbers have
+     * settled nothing. A name is what a scanner or a clerk happened to call the file rather than
+     * anything the order itself says, so a match here is worth reporting but is not proof.
+     *
+     * <p>{@code goNumber} is the guard that keeps it from being noise. Scanners hand out names like
+     * "scan0001.pdf" by the hundred, and two unrelated orders sharing one is a coincidence, not a
+     * duplicate — so a candidate whose G.O. number is known and <em>differs</em> from the subject's
+     * is excluded outright. Where either side has no number, there is nothing to contradict the
+     * name and the match stands. Pass null when the subject's own number is unknown.
+     *
+     * <p>Normalised to lower case with runs of whitespace collapsed, matching
+     * {@code idx_files_name_normalised}; the same caution about keeping the two in step applies as
+     * for the G.O. number above.
+     */
+    @Query(
+            value =
+                    """
+                    select f.* from files f
+                    where f.is_deleted = false
+                      and f.id <> cast(:excludeId as uuid)
+                      and btrim(regexp_replace(lower(f.file_name), '\s+', ' ', 'g')) = :normalisedName
+                      and (cast(:goNumber as varchar) is null
+                           or f.go_number is null
+                           or regexp_replace(lower(f.go_number), '[^a-z0-9]', '', 'g')
+                              = cast(:goNumber as varchar))
+                    order by f.created_at asc
+                    limit 1
+                    """,
+            nativeQuery = true)
+    Optional<StoredFile> findEarliestLiveWithNormalisedFileName(
+            @Param("normalisedName") String normalisedName,
+            @Param("goNumber") String goNumber,
+            @Param("excludeId") String excludeId);
+
     /** The home dashboard's "recently filed", across every department. */
     Page<StoredFile> findByDeletedFalse(Pageable pageable);
 

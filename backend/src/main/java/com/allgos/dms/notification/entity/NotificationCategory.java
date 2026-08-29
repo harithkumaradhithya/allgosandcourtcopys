@@ -23,6 +23,13 @@ public enum NotificationCategory {
     /** New documents filed by anyone. Everybody is told, so everybody can filter for it. */
     UPLOADS("Uploads", false, NotificationType.FILE_UPLOADED),
 
+    /**
+     * The same G.O. number filed twice, for an administrator to resolve.
+     *
+     * <p>Administrators only, for the same reason the notification is: nobody else can act on it.
+     */
+    DUPLICATES("Possible duplicates", true, NotificationType.DUPLICATE_UPLOAD),
+
     /** A document or an empty folder removed, with the reason the remover gave. */
     DELETIONS("Deletions", false, NotificationType.FILE_DELETED, NotificationType.FOLDER_DELETED),
 
