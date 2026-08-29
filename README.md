@@ -106,7 +106,29 @@ with the password they chose at registration, once an admin has approved them.
 ```bash
 cd backend   && ./mvnw verify     # unit + Testcontainers integration tests (needs Docker running)
 cd admin-web && npm run lint && npm run typecheck && npm test && npm run build
+cd admin-web && npm run e2e       # Playwright end-to-end; starts the dev server itself
 ```
+
+### End-to-end tests and the Playwright MCP
+
+`npm install` in `admin-web` also downloads the Chromium builds Playwright needs, via a `postinstall`
+hook — packages alone are not enough, and without the browsers `npm run e2e` fails with "Executable
+doesn't exist". Two builds are fetched because the test runner and the MCP server track different
+Playwright releases. They are cached per-revision outside the repo, so this costs a one-off ~230 MB on
+a new machine and nothing afterwards.
+
+The hook never fails the install. If you were offline or behind a proxy, run it again yourself:
+
+```bash
+cd admin-web && npm run e2e:install
+```
+
+Set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` to opt out entirely (CI images that bake the browsers in).
+
+[.mcp.json](.mcp.json) registers the Playwright MCP server, letting Claude Code drive a real browser
+against the running app. It points at the copy in `admin-web/node_modules`, so the server and its
+browser can never drift apart. Claude Code reads this file at start-up and asks once for approval —
+restart it after pulling, then confirm with `/mcp`.
 
 ## Status
 

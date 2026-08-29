@@ -1,4 +1,0 @@
-Go.No need to be added at the upload home page
-Go.no should be searchable 
-Search bar size should not be in the header, it should be next to user name.
-Go.no should be there at upload page
