@@ -41,7 +41,7 @@ export function DeletionsPage() {
     onSuccess: () => {
       // The row stays in the log with its restore stamped, so the list is re-read rather than
       // patched — it moves between tabs on its own. A restore also returns the document to
-      // favourites and search, which is why this invalidates every document-bearing list.
+      // search, which is why this invalidates every document-bearing list.
       void invalidateFileLists(queryClient);
     },
   });

@@ -13,7 +13,6 @@ import { AccessRestrictedPage } from '@/features/auth/AccessRestrictedPage';
 import { DepartmentPage } from '@/features/documents/DepartmentPage';
 import { DepartmentsPage } from '@/features/documents/DepartmentsPage';
 import { DownloadsPage } from '@/features/documents/DownloadsPage';
-import { FavoritesPage } from '@/features/documents/FavoritesPage';
 import { FilePreviewPage } from '@/features/documents/FilePreviewPage';
 import { FolderPage } from '@/features/documents/FolderPage';
 import { MyUploadsPage } from '@/features/documents/MyUploadsPage';
@@ -80,7 +79,9 @@ export function App() {
           <Route path="/upload" element={<Navigate to="/departments" replace />} />
           <Route path="/my-uploads" element={<MyUploadsPage />} />
           <Route path="/downloads" element={<DownloadsPage />} />
-          <Route path="/favorites" element={<FavoritesPage />} />
+          {/* Favourites were removed; anyone with the old link or bookmark lands on the
+              documents they can actually act on rather than a 404. */}
+          <Route path="/favorites" element={<Navigate to="/my-uploads" replace />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/phonebook" element={<PhonebookPage />} />

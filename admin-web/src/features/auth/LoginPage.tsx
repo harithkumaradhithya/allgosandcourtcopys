@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +23,50 @@ export function LoginPage() {
   const [notice] = useState<string | null>(state?.notice ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Browsers fill saved credentials straight into the DOM without firing an input event React can
+  // hear, so the state behind the button stayed empty and Sign in sat greyed out over two visibly
+  // filled fields until the user clicked or typed something. Read the fields back for the first
+  // couple of seconds and adopt whatever the browser put there.
+  //
+  // Only a field the user has not touched is adopted, so this can never fight someone typing: the
+  // moment a real keystroke lands, state and the DOM agree and there is nothing left to copy.
+  const typed = useRef(false);
+
+  useEffect(() => {
+    const adopt = () => {
+      const form = formRef.current;
+      if (!form || typed.current) return true; // nothing more to watch for
+
+      const filled = (name: string) =>
+        (form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? '';
+
+      const filledMobile = filled('mobile').replace(/\D/g, '').slice(0, 10);
+      const filledPassword = filled('password');
+
+      if (filledMobile) setMobile(filledMobile);
+      if (filledPassword) setPassword(filledPassword);
+
+      // Keep watching until both halves have arrived: the two fields are not always filled in the
+      // same tick, and stopping at the first would leave the second one behind again.
+      return filledMobile !== '' && filledPassword !== '';
+    };
+
+    if (adopt()) return;
+
+    // Autofill can land a beat after mount — and after a chooser, several beats — so this keeps
+    // looking briefly rather than reading once and giving up.
+    const timer = window.setInterval(() => {
+      if (adopt()) window.clearInterval(timer);
+    }, 120);
+    const stop = window.setTimeout(() => window.clearInterval(timer), 2500);
+
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(stop);
+    };
+  }, []);
 
   const mobileValid = /^[6-9]\d{9}$/.test(mobile);
   const canSubmit = mobileValid && password.length > 0 && !busy;
@@ -54,11 +98,15 @@ export function LoginPage() {
       }
     >
       {/* A real form, so the browser offers to fill it and Enter submits from either field. */}
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      <form ref={formRef} className="space-y-4" onSubmit={handleSubmit}>
         <TextField
           label="Mobile number"
+          name="mobile"
           value={mobile}
-          onChange={(event) => setMobile(event.target.value.replace(/\D/g, '').slice(0, 10))}
+          onChange={(event) => {
+            typed.current = true;
+            setMobile(event.target.value.replace(/\D/g, '').slice(0, 10));
+          }}
           placeholder="10-digit mobile number"
           inputMode="numeric"
           autoComplete="tel-national"
@@ -70,9 +118,13 @@ export function LoginPage() {
 
         <TextField
           label="Password"
+          name="password"
           type="password"
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => {
+            typed.current = true;
+            setPassword(event.target.value);
+          }}
           autoComplete="current-password"
         />
 

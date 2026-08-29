@@ -15,7 +15,8 @@ import {
 } from '@/features/documents/api';
 import { toApiError } from '@/lib/errors';
 import { formatCategory, formatFileSize } from '@/lib/format';
-import { invalidateFileLists } from '@/lib/queryKeys';
+import { UPLOAD_CONCURRENCY, runWithLimit } from '@/lib/concurrency';
+import { refreshFileLists } from '@/lib/queryKeys';
 import type { FolderCategory } from '@/types/api';
 
 type Status = 'waiting' | 'uploading' | 'done' | 'failed';
@@ -173,13 +174,15 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
     // through the loop are asynchronous, so the `items` variable in this closure never reflects
     // them — only what each request itself reported does.
     let allSucceeded = true;
+    const folder = targetFolderId;
 
-    for (let index = 0; index < items.length; index += 1) {
-      if (items[index].status === 'done') continue;
+    // A few at a time rather than one after another; see runWithLimit.
+    await runWithLimit(items.length, UPLOAD_CONCURRENCY, async (index) => {
+      if (items[index].status === 'done') return;
       update(index, { status: 'uploading', percent: 0, error: undefined });
 
       try {
-        const uploadResult = await uploadFiles(targetFolderId, [items[index].file], (percent) =>
+        const uploadResult = await uploadFiles(folder, [items[index].file], (percent) =>
           update(index, { percent }),
         );
         const refusal = uploadResult.rejected[0];
@@ -193,10 +196,10 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
         update(index, { status: 'failed', error: toApiError(error).message });
         allSucceeded = false;
       }
-    }
+    });
 
     setBusy(false);
-    void invalidateFileLists(queryClient);
+    refreshFileLists(queryClient);
 
     if (allSucceeded && items.length > 0) {
       setResult({

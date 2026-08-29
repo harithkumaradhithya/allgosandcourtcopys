@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { DescriptionDialog } from '@/features/documents/DescriptionDialog';
-import { fetchDownloadLink, setFavorite } from '@/features/documents/api';
+import { fetchDownloadLink } from '@/features/documents/api';
 import { toApiError } from '@/lib/errors';
 import { formatDateTime, formatFileSize, formatFileType } from '@/lib/format';
-import { invalidateFileLists } from '@/lib/queryKeys';
 import { fileTypeTone } from '@/lib/tones';
 import type { FileItem } from '@/types/api';
 
@@ -44,18 +42,6 @@ export function FileTable({
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewingDescription, setViewingDescription] = useState<FileItem | null>(null);
-  const queryClient = useQueryClient();
-
-  /**
-   * Starring re-reads the lists rather than patching the row, so a document that has just left the
-   * favourites list actually leaves it. Both directions are idempotent server-side, so a rapid
-   * double click settles on whatever the last request said.
-   */
-  const star = useMutation({
-    mutationFn: (file: FileItem) => setFavorite(file.id, !file.favorite),
-    onSuccess: () => void invalidateFileLists(queryClient),
-    onError: (cause) => setError(toApiError(cause).message),
-  });
 
   const download = async (file: FileItem) => {
     setDownloading(file.id);
@@ -124,11 +110,6 @@ export function FileTable({
               >
                 <td className="max-w-[22rem] px-5 py-3">
                   <div className="flex items-center gap-3">
-                    <StarButton
-                      file={file}
-                      busy={star.isPending && star.variables?.id === file.id}
-                      onToggle={() => star.mutate(file)}
-                    />
                     <FileGlyph contentType={file.fileType} />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-900 transition-colors
@@ -256,50 +237,6 @@ export function FileTable({
 
       <DescriptionDialog file={viewingDescription} onClose={() => setViewingDescription(null)} />
     </div>
-  );
-}
-
-/**
- * The star.
- *
- * <p>A real toggle button carrying `aria-pressed`, so a screen reader announces the state rather
- * than leaving it to a filled shape. The label says what the click will do — "Add to favorites" —
- * because that is what a user needs to hear before pressing it.
- */
-function StarButton({
-  file,
-  busy,
-  onToggle,
-}: {
-  file: FileItem;
-  busy: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={busy}
-      aria-pressed={file.favorite}
-      aria-label={file.favorite ? `Remove ${file.fileName} from favorites` : `Add ${file.fileName} to favorites`}
-      title={file.favorite ? 'Remove from favorites' : 'Add to favorites'}
-      className={`shrink-0 rounded-md p-1 outline-none transition-all duration-[--duration-base]
-        ease-[--ease-settle] hover:scale-110 focus-visible:ring-2 focus-visible:ring-navy-300
-        disabled:opacity-50 ${file.favorite ? 'text-gold-500' : 'text-slate-300 hover:text-gold-400'}`}
-    >
-      <svg
-        aria-hidden
-        viewBox="0 0 24 24"
-        fill={file.favorite ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-4.5 w-4.5"
-      >
-        <path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.8l6.5-.9L12 3Z" />
-      </svg>
-    </button>
   );
 }
 

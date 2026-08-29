@@ -263,19 +263,6 @@ export async function fetchPreviewLink(fileId: string): Promise<PreviewLink> {
   return data;
 }
 
-/** Both directions are idempotent, so the UI can toggle without tracking what the server thinks. */
-export async function setFavorite(fileId: string, favorite: boolean): Promise<FileItem> {
-  const { data } = favorite
-    ? await api.post<FileItem>(`/files/${fileId}/favorite`)
-    : await api.delete<FileItem>(`/files/${fileId}/favorite`);
-  return data;
-}
-
-export async function fetchFavorites(page = 0): Promise<PageResponse<FileItem>> {
-  const { data } = await api.get<PageResponse<FileItem>>('/favorites', { params: { page } });
-  return data;
-}
-
 export async function fetchDownloadHistory(page = 0): Promise<PageResponse<DownloadRecord>> {
   const { data } = await api.get<PageResponse<DownloadRecord>>('/downloads', { params: { page } });
   return data;

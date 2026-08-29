@@ -5,7 +5,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import {
   fetchDepartments,
-  fetchFavorites,
   fetchMyUploads,
   fetchRecentFiles,
 } from '@/features/documents/api';
@@ -33,7 +32,6 @@ export function SignedInPage() {
 
   const departments = useQuery({ queryKey: ['departments'], queryFn: fetchDepartments });
   const myUploads = useQuery({ queryKey: ['my-uploads', 0], queryFn: () => fetchMyUploads(0) });
-  const favorites = useQuery({ queryKey: ['favorites', 0], queryFn: () => fetchFavorites(0) });
   const recent = useQuery({ queryKey: ['recent-files'], queryFn: () => fetchRecentFiles(5) });
 
   // Only admins may call this one, so it is not even attempted for a member — a 403 would send
@@ -60,7 +58,7 @@ export function SignedInPage() {
       }`}
     >
       <div className="space-y-6">
-        <section className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Tile
             to="/departments"
             label="Departments"
@@ -78,12 +76,6 @@ export function SignedInPage() {
             label="My uploads"
             value={myUploads.data ? String(myUploads.data.totalItems) : '—'}
             hint="Yours to replace or delete"
-          />
-          <Tile
-            to="/favorites"
-            label="Favorites"
-            value={favorites.data ? String(favorites.data.totalItems) : '—'}
-            hint="Starred for quick access"
           />
         </section>
 

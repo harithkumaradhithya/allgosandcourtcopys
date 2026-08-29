@@ -41,7 +41,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * Proves the description field end to end: a real scanned government order goes in over HTTP, OCR
  * runs against real Tesseract and its bundled English language data, and the Abstract paragraph
- * comes back out in the upload response — not a mock standing in for any of that.
+ * ends up on the stored document — not a mock standing in for any of that.
+ *
+ * <p>The description is no longer in the upload response. Reading a scan takes seconds and the
+ * upload is not made to wait for it (see {@link
+ * com.allgos.dms.file.service.DocumentEnrichmentService}), so these tests upload and then wait for
+ * the row to be filled in, which is exactly what the screen does.
  *
  * <p>Both fixtures under {@code sample-documents/} are genuine scans supplied from real office use:
  * neither carries a text layer, so both exercise the OCR fallback in {@link
@@ -104,22 +109,53 @@ class DocumentAbstractExtractionIT extends AbstractStorageIntegrationTest {
     @Test
     @DisplayName("a scanned Public Works transfer order yields its Abstract paragraph via OCR")
     void extractsAbstractFromScannedTransferOrder() throws Exception {
-        upload(memberToken, sample("sample-documents/go-rt-137-scanned.pdf", "GO Rt 137.pdf"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.uploaded[0].description").value(org.hamcrest.Matchers.allOf(
-                        org.hamcrest.Matchers.containsString(
-                                "Transfers and Postings of Executive Engineers (Civil)"),
-                        org.hamcrest.Matchers.endsWith("Issued."))));
+        UUID fileId = uploadAndGetId(sample("sample-documents/go-rt-137-scanned.pdf", "GO Rt 137.pdf"));
+
+        String description = awaitDescription(fileId);
+
+        org.assertj.core.api.Assertions.assertThat(description)
+                .contains("Transfers and Postings of Executive Engineers (Civil)")
+                .endsWith("Issued.");
     }
 
     @Test
     @DisplayName("a scanned Finance dearness relief order yields its Abstract paragraph via OCR")
     void extractsAbstractFromScannedFinanceOrder() throws Exception {
-        upload(memberToken, sample("sample-documents/go-ms-168-scanned.pdf", "GO Ms 168.pdf"))
+        UUID fileId = uploadAndGetId(sample("sample-documents/go-ms-168-scanned.pdf", "GO Ms 168.pdf"));
+
+        String description = awaitDescription(fileId);
+
+        org.assertj.core.api.Assertions.assertThat(description)
+                .contains("Interim Monthly Payout")
+                .endsWith("Issued.");
+    }
+
+    /**
+     * The upload answers immediately; the description lands a little later on the enrichment pool.
+     * Polled rather than slept on, so a fast machine does not pay for a slow one's worst case.
+     */
+    private String awaitDescription(UUID fileId) throws InterruptedException {
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(60).toNanos();
+        while (System.nanoTime() < deadline) {
+            String description = fileRepository
+                    .findById(fileId)
+                    .map(com.allgos.dms.file.entity.StoredFile::getDescription)
+                    .orElse(null);
+            if (description != null) {
+                return description;
+            }
+            Thread.sleep(250);
+        }
+        throw new AssertionError("No description was extracted for " + fileId + " within 60s");
+    }
+
+    private UUID uploadAndGetId(MockMultipartFile part) throws Exception {
+        String response = upload(memberToken, part)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.uploaded[0].description").value(org.hamcrest.Matchers.allOf(
-                        org.hamcrest.Matchers.containsString("Interim Monthly Payout"),
-                        org.hamcrest.Matchers.endsWith("Issued."))));
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return UUID.fromString(objectMapper.readTree(response).get("uploaded").get(0).get("id").asText());
     }
 
     @Test

@@ -30,7 +30,7 @@ export function ReplaceFileDialog({
   const replace = useMutation({
     mutationFn: () => replaceFile(file!.id, chosen!, setPercent),
     onSuccess: () => {
-      // The document keeps its id, so a favourite or a search result still points at it — and both
+      // The document keeps its id, so a search result still points at it — and both
       // now show a stale name and size until they are re-read.
       void invalidateFileLists(queryClient);
       close();

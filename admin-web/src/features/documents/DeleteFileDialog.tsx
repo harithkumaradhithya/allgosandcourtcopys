@@ -29,7 +29,7 @@ export function DeleteFileDialog({
   const remove = useMutation({
     mutationFn: () => deleteFile(file!.id, reason.trim()),
     onSuccess: () => {
-      // Favourites, search and the home dashboard all show documents too, so the list of what a
+      // Search and the home dashboard show documents too, so the list of what a
       // deletion invalidates lives in one place rather than being re-guessed here.
       void invalidateFileLists(queryClient);
       close();

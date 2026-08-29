@@ -71,12 +71,7 @@ public class FileRecordWriter {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FileView record(
-            UUID folderId,
-            User uploader,
-            UploadValidator.Accepted accepted,
-            String storageKey,
-            String description,
-            String goNumber) {
+            UUID folderId, User uploader, UploadValidator.Accepted accepted, String storageKey) {
 
         Folder folder = folderRepository
                 .findById(folderId)
@@ -91,8 +86,8 @@ public class FileRecordWriter {
         file.setFileType(accepted.contentType());
         file.setSizeBytes(accepted.sizeBytes());
         file.setStorageKey(storageKey);
-        file.setDescription(description);
-        file.setGoNumber(goNumber);
+        // The description and G.O. number are read out of the document itself and filled in a moment
+        // later — see DocumentEnrichmentService — so the upload does not wait on OCR.
         file.setUploadedBy(uploader);
 
         StoredFile saved = fileRepository.save(file);
@@ -110,6 +105,25 @@ public class FileRecordWriter {
                         "sizeBytes", saved.getSizeBytes()));
 
         return FileView.from(saved, saved.canBeModifiedBy(uploader));
+    }
+
+    /**
+     * Fills in the description and G.O. number read out of the document after the fact, by {@link
+     * DocumentEnrichmentService}.
+     *
+     * <p>Guarded on the storage key. Between the upload committing and the extraction finishing, the
+     * document may have been replaced or deleted; in either case these values describe bytes the row
+     * no longer points at, and writing them would put a stale description under a new document.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void applyEnrichment(UUID fileId, String storageKey, String description, String goNumber) {
+        fileRepository
+                .findByIdAndDeletedFalse(fileId)
+                .filter(file -> storageKey.equals(file.getStorageKey()))
+                .ifPresent(file -> {
+                    file.setDescription(description);
+                    file.setGoNumber(goNumber);
+                });
     }
 
     /**
@@ -150,9 +164,7 @@ public class FileRecordWriter {
             User actor,
             UploadValidator.Accepted accepted,
             String storageKey,
-            String previousKey,
-            String description,
-            String goNumber) {
+            String previousKey) {
 
         StoredFile file = fileRepository
                 .findByIdAndDeletedFalse(fileId)
@@ -170,10 +182,11 @@ public class FileRecordWriter {
         file.setFileType(accepted.contentType());
         file.setSizeBytes(accepted.sizeBytes());
         file.setStorageKey(storageKey);
-        // Re-extracted from the new bytes: a replaced document is a different document, and its old
-        // description and G.O. number would otherwise linger under a mismatched name.
-        file.setDescription(description);
-        file.setGoNumber(goNumber);
+        // Cleared rather than kept: a replaced document is a different document, and the old
+        // description and G.O. number would otherwise linger under a mismatched name until the
+        // re-read lands. DocumentEnrichmentService fills them in again from the new bytes.
+        file.setDescription(null);
+        file.setGoNumber(null);
         file.setVersion(file.getVersion() + 1);
         // uploadedBy is left alone: it is who put the document into the system, and an admin
         // correcting someone's file does not take ownership of it.

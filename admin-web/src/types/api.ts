@@ -94,7 +94,6 @@ export interface FileItem {
   /** True when the browser can render these bytes in place — PDFs and images. */
   previewable: boolean;
   /** Whether *this* viewer has starred it. Another user's star is never visible. */
-  favorite: boolean;
   /** The Abstract paragraph read from the document itself. Null for a scan nothing could be read from. */
   description: string | null;
   /** The G.O. number read from the document itself, e.g. "G.O.(Ms) No. 123". Null when there is none. */

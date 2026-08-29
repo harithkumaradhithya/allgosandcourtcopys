@@ -34,7 +34,6 @@ type IconName =
   | 'phonebook'
   | 'letters'
   | 'uploads'
-  | 'star'
   | 'download'
   | 'bell'
   | 'dashboard'
@@ -61,7 +60,6 @@ const ICONS: Record<IconName, string> = {
     'M7 3.5h11.5A1.5 1.5 0 0 1 20 5v14a1.5 1.5 0 0 1-1.5 1.5H7zM7 3.5V20.5M4 7.5h3M4 12h3M4 16.5h3M13.5 10.5a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0M9 16c0-1.7 1.3-2.75 2.75-2.75S14.5 14.3 14.5 16',
   letters: 'M4.5 5.5h15v13h-15zM4.5 6.5l7.5 5.5 7.5-5.5',
   uploads: 'M12 16V4m0 0L8 8m4-4 4 4M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16',
-  star: 'm12 3.75 2.6 5.3 5.85.85-4.23 4.12 1 5.83L12 17.1l-5.22 2.75 1-5.83-4.23-4.12 5.85-.85z',
   download: 'M12 4v12m0 0 4-4m-4 4-4-4M4 18.5V19a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-.5',
   bell: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0',
   dashboard: 'M4 4h7v7H4zM13 4h7v4.5h-7zM13 10.5h7V20h-7zM4 13h7v7H4z',
@@ -156,7 +154,6 @@ const SECTIONS: NavSection[] = [
     heading: 'Yours',
     items: [
       { to: '/my-uploads', label: 'My uploads', icon: 'uploads' },
-      { to: '/favorites', label: 'Favourites', icon: 'star' },
       { to: '/downloads', label: 'My downloads', icon: 'download' },
       { to: '/notifications', label: 'Notifications', icon: 'bell', badge: 'unread' },
     ],

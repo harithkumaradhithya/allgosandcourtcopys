@@ -114,14 +114,13 @@ function file(id: string, fileName: string, overrides: Record<string, unknown> =
     version: 1,
     canModify: true,
     previewable: true,
-    favorite: false,
     uploadedAt: '2026-08-11T09:15:00Z',
     ...overrides,
   };
 }
 
 const FILES = [
-  file(FILE_ID, 'Circular 42 of 2026 — revised working hours.pdf', { favorite: true }),
+  file(FILE_ID, 'Circular 42 of 2026 — revised working hours.pdf'),
   file('33333333-3333-3333-3333-333333333332', 'Government Order 118 of 2026.pdf', {
     version: 3,
     uploadedByName: 'Arun Kumar',
@@ -641,7 +640,6 @@ const ROUTES: [RegExp, (url: string) => unknown][] = [
   })],
   [/\/files\/[^/]+$/, () => FILES[0]],
 
-  [/\/favorites/, () => page(FILES.filter((entry) => entry.favorite))],
   [/\/downloads/, () => page([
     {
       id: '99999999-9999-9999-9999-999999999991',

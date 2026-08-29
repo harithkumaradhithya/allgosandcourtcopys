@@ -71,7 +71,7 @@ public class FileService {
     private final StorageService storageService;
     private final UploadValidator uploadValidator;
     private final FileRecordWriter fileRecordWriter;
-    private final DocumentAbstractExtractor abstractExtractor;
+    private final DocumentEnrichmentService enrichmentService;
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final AppProperties properties;
@@ -84,7 +84,7 @@ public class FileService {
             StorageService storageService,
             UploadValidator uploadValidator,
             FileRecordWriter fileRecordWriter,
-            DocumentAbstractExtractor abstractExtractor,
+            DocumentEnrichmentService enrichmentService,
             AuditService auditService,
             NotificationService notificationService,
             AppProperties properties) {
@@ -95,7 +95,7 @@ public class FileService {
         this.storageService = storageService;
         this.uploadValidator = uploadValidator;
         this.fileRecordWriter = fileRecordWriter;
-        this.abstractExtractor = abstractExtractor;
+        this.enrichmentService = enrichmentService;
         this.auditService = auditService;
         this.notificationService = notificationService;
         this.properties = properties;
@@ -181,8 +181,6 @@ public class FileService {
         UploadValidator.Accepted accepted = uploadValidator.validate(part);
         uploadValidator.scanForMalware(part);
 
-        DocumentAbstractExtractor.Extraction extraction = extractEnrichment(part, accepted);
-
         String key = storageService.newKey(folder.departmentId(), folder.folderId(), accepted.fileName());
 
         InputStream content;
@@ -199,38 +197,21 @@ public class FileService {
             StorageService.closeQuietly(content);
         }
 
+        FileView view;
         try {
-            return fileRecordWriter.record(
-                    folder.folderId(),
-                    uploader,
-                    accepted,
-                    key,
-                    extraction.description(),
-                    extraction.goNumber());
+            view = fileRecordWriter.record(folder.folderId(), uploader, accepted, key);
         } catch (RuntimeException ex) {
             // The row did not commit, so nothing will ever reference these bytes.
             log.error("Recording upload {} failed; removing the stored object", accepted.fileName(), ex);
             storageService.delete(key);
             throw ex;
         }
-    }
 
-    /**
-     * The Abstract paragraph and G.O. number, when the upload is a PDF. Nothing else carries that
-     * convention, and a failure to read it is never a reason to refuse the upload it would have
-     * enriched.
-     */
-    private DocumentAbstractExtractor.Extraction extractEnrichment(
-            MultipartFile part, UploadValidator.Accepted accepted) {
-        if (!"application/pdf".equals(accepted.contentType())) {
-            return DocumentAbstractExtractor.Extraction.NONE;
-        }
-        try {
-            return abstractExtractor.extract(part.getBytes());
-        } catch (IOException ex) {
-            log.warn("Could not read {} to extract a description", accepted.fileName(), ex);
-            return DocumentAbstractExtractor.Extraction.NONE;
-        }
+        // Outside the block above on purpose: the row has committed by here, and a failure to queue
+        // the extraction must not reach a catch that deletes the document's bytes.
+        // Reading the Abstract out of a scan takes seconds; the upload is not made to wait for it.
+        enrichmentService.enrich(view.id(), key, accepted.contentType());
+        return view;
     }
 
     // ----------------------------------------------------------------------- replace
@@ -264,8 +245,6 @@ public class FileService {
         UploadValidator.Accepted accepted = uploadValidator.validate(part);
         uploadValidator.scanForMalware(part);
 
-        DocumentAbstractExtractor.Extraction extraction = extractEnrichment(part, accepted);
-
         String key = storageService.newKey(target.departmentId(), target.folderId(), accepted.fileName());
 
         InputStream content;
@@ -282,21 +261,20 @@ public class FileService {
             StorageService.closeQuietly(content);
         }
 
+        FileView view;
         try {
-            return fileRecordWriter.applyReplacement(
-                    fileId,
-                    actor,
-                    accepted,
-                    key,
-                    target.storageKey(),
-                    extraction.description(),
-                    extraction.goNumber());
+            view = fileRecordWriter.applyReplacement(fileId, actor, accepted, key, target.storageKey());
         } catch (RuntimeException ex) {
             // The row still points at the old key, so these bytes are unreachable.
             log.error("Replacing file {} failed; removing the stored object", fileId, ex);
             storageService.delete(key);
             throw ex;
         }
+
+        // The replaced document is a different document, so its description is re-read from the new
+        // bytes — again off the request, and again only once the row already says the truth.
+        enrichmentService.enrich(fileId, key, accepted.contentType());
+        return view;
     }
 
     // -------------------------------------------------------------------------- read

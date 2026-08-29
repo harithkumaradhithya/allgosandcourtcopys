@@ -18,6 +18,11 @@ spring:
     multipart:
       max-file-size: ${MAX_FILE_SIZE:50MB}
       max-request-size: ${MAX_REQUEST_SIZE:200MB}
+      # Anything under this stays in memory instead of being spooled to a temp file and read back.
+      # Most of what this office uploads is a scan of a page or two, comfortably inside it, so the
+      # common upload loses a disk write and two reads. Larger files still go to disk, which is what
+      # keeps a bulk import from being decided by the heap.
+      file-size-threshold: ${MULTIPART_MEMORY_THRESHOLD:4MB}
 
 server:
   port: ${SERVER_PORT:8080}

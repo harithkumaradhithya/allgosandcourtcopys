@@ -8,7 +8,8 @@ import { UploadDestination } from '@/features/documents/UploadDestination';
 import type { Destination } from '@/features/documents/UploadDestination';
 import { toApiError } from '@/lib/errors';
 import { formatFileSize } from '@/lib/format';
-import { invalidateFileLists } from '@/lib/queryKeys';
+import { UPLOAD_CONCURRENCY, runWithLimit } from '@/lib/concurrency';
+import { refreshFileLists } from '@/lib/queryKeys';
 
 type Status = 'waiting' | 'uploading' | 'done' | 'failed';
 
@@ -68,8 +69,10 @@ export function UploadDialog({
     if (!targetId) return;
     setBusy(true);
 
-    for (let index = 0; index < items.length; index += 1) {
-      if (items[index].status === 'done') continue;
+    // A few at a time rather than one after another: each file is its own request, and waiting for
+    // one to finish before opening the next left the connection idle between them.
+    await runWithLimit(items.length, UPLOAD_CONCURRENCY, async (index) => {
+      if (items[index].status === 'done') return;
       update(index, { status: 'uploading', percent: 0, error: undefined });
 
       try {
@@ -87,12 +90,12 @@ export function UploadDialog({
       } catch (error) {
         update(index, { status: 'failed', error: toApiError(error).message });
       }
-    }
+    });
 
     setBusy(false);
     // Every document-bearing list, not a hand-picked three: a document arriving changes the folder,
     // My Uploads, the home dashboard's recents and the counts on the department cards.
-    void invalidateFileLists(queryClient);
+    refreshFileLists(queryClient);
   };
 
   const close = () => {
