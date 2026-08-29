@@ -26,6 +26,10 @@ interface Item {
   status: Status;
   percent: number;
   error?: string;
+  /** The Abstract paragraph the server read off the document itself, once it has finished uploading. */
+  description?: string | null;
+  /** The G.O. number read off the document, alongside the description. */
+  goNumber?: string | null;
 }
 
 type FolderMode = 'existing' | 'new';
@@ -65,7 +69,13 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
   const [newFolderCategory, setNewFolderCategory] = useState<FolderCategory>('GENERAL');
   const [destinationError, setDestinationError] = useState<string | null>(null);
 
-  const [result, setResult] = useState<{ departmentName: string; folderName: string } | null>(null);
+  const [result, setResult] = useState<{
+    departmentName: string;
+    folderName: string;
+    /** Only set for a single-file upload — several files each have their own, with nowhere to put them all. */
+    description?: string | null;
+    goNumber?: string | null;
+  } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -175,6 +185,8 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
     // them — only what each request itself reported does.
     let allSucceeded = true;
     const folder = targetFolderId;
+    let uploadedDescription: string | null | undefined;
+    let uploadedGoNumber: string | null | undefined;
 
     // A few at a time rather than one after another; see runWithLimit.
     await runWithLimit(items.length, UPLOAD_CONCURRENCY, async (index) => {
@@ -190,7 +202,15 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
           update(index, { status: 'failed', error: refusal.message });
           allSucceeded = false;
         } else {
-          update(index, { status: 'done', percent: 100 });
+          const uploaded = uploadResult.uploaded[0];
+          update(index, {
+            status: 'done',
+            percent: 100,
+            description: uploaded?.description,
+            goNumber: uploaded?.goNumber,
+          });
+          uploadedDescription = uploaded?.description;
+          uploadedGoNumber = uploaded?.goNumber;
         }
       } catch (error) {
         update(index, { status: 'failed', error: toApiError(error).message });
@@ -205,6 +225,7 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
       setResult({
         departmentName: departments.data?.find((department) => department.id === departmentId)?.name ?? '',
         folderName: targetFolderName ?? 'General',
+        ...(items.length === 1 ? { description: uploadedDescription, goNumber: uploadedGoNumber } : {}),
       });
     }
   };
@@ -236,6 +257,20 @@ export function QuickUploadDialog({ open, onClose }: { open: boolean; onClose: (
             Filed in <span className="font-semibold text-slate-900">{result.departmentName}</span> ·{' '}
             <span className="font-semibold text-slate-900">{result.folderName}</span>
           </p>
+
+          {/* Read off the document itself, so it's worth showing right away rather than making the
+              uploader open the file back up to see what the server made of it. */}
+          {result.description && (
+            <div className="mt-4 w-full rounded-lg border border-line bg-surface-sunken p-3 text-left">
+              {result.goNumber && (
+                <p className="mb-1 text-xs font-semibold text-navy-700">{result.goNumber}</p>
+              )}
+              <p className="max-h-32 overflow-y-auto whitespace-pre-line text-xs leading-relaxed text-slate-600">
+                {result.description}
+              </p>
+            </div>
+          )}
+
           <Button className="mt-6" onClick={close}>
             Done
           </Button>

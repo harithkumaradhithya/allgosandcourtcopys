@@ -45,17 +45,21 @@ public final class FileResponses {
     }
 
     /**
-     * Where an unfiled PDF probably belongs, guessed from its own Abstract heading.
+     * Where an unfiled PDF probably belongs, guessed from its own Abstract heading, plus its G.O.
+     * number when one was read.
      *
      * <p>Always names a folder when a department is found: every department carries a "General"
      * folder (seeded by migration), so there is always somewhere to default to even when nothing
-     * more specific was chosen. All fields are null together when nothing in the document matched a
-     * known department closely enough to act on.
+     * more specific was chosen. The department fields are null together when nothing in the document
+     * matched a known department closely enough to act on — but {@code goNumber} is reported
+     * independently of that: a document can carry a perfectly readable G.O. number even when its
+     * department heading does not resemble any of the ones on file, and that is still worth showing
+     * before the upload happens rather than only after.
      */
     public record SuggestedDestination(
-            UUID departmentId, String departmentName, UUID folderId, String folderName) {
+            UUID departmentId, String departmentName, UUID folderId, String folderName, String goNumber) {
 
-        public static final SuggestedDestination NONE = new SuggestedDestination(null, null, null, null);
+        public static final SuggestedDestination NONE = new SuggestedDestination(null, null, null, null, null);
     }
 
     /**

@@ -78,6 +78,52 @@ class DocumentAbstractExtractorGoNumberTest {
         assertThat(extraction.goNumber()).isEqualTo("G.O.(Rt.) No.42");
     }
 
+    /**
+     * Reproduces the Finance (Procurement Cell) and (Allowances) letterhead style: a period rather
+     * than a space between the "(Ms)" marker and "No" — "G.O.(Ms).No.10", not "G.O.(Ms) No.10". The
+     * G.O. number pattern previously required whitespace there and missed this shape entirely.
+     */
+    @Test
+    void readsAGoNumberWithNoSpaceBeforeNo() throws Exception {
+        byte[] pdf = textPdf(
+                "FINANCE [Procurement Cell] DEPARTMENT",
+                "G.O.(Ms).No.10, Dated 13th January 2026",
+                "ABSTRACT",
+                "Public Procurement - Consolidated instructions - Orders - Issued.",
+                "Finance [Procurement Cell] Department");
+
+        Extraction extraction = extractor.extract(pdf);
+
+        assertThat(extraction.goNumber()).isEqualTo("G.O.(Ms).No.10");
+    }
+
+    /**
+     * Reproduces a citation block headed "Ref:" rather than "Read:" — the shape this office's
+     * Finance (TAPS) letters use — plus the "Read the following:-" phrasing used elsewhere. Neither
+     * heading was recognised before this fix, so a cited G.O. after either one could be picked up as
+     * if it were the document's own number.
+     */
+    @Test
+    void treatsRefAndReadTheFollowingAsCitationBoundariesToo() throws Exception {
+        byte[] refPdf = textPdf(
+                "G.O.(Ms) No.7                                 Dated: 09.01.2026",
+                "ABSTRACT",
+                "Pension - Sustenance support to eligible Government servants - Issued.",
+                "Finance (PGC) Department",
+                "Ref:",
+                "G.O.(Ms) No.111, Finance (TAPS) Department, dated 16.06.2026");
+        assertThat(extractor.extract(refPdf).goNumber()).isEqualTo("G.O.(Ms) No.7");
+
+        byte[] readFollowingPdf = textPdf(
+                "G.O.(Ms).No.10, Dated 13th January 2026",
+                "ABSTRACT",
+                "Public Procurement - Consolidated instructions - Orders - Issued.",
+                "Finance [Procurement Cell] Department",
+                "Read the following:-",
+                "1. G.O.(Ms).No.207, Finance (Salaries) Department, dated: 04.07.2017.");
+        assertThat(extractor.extract(readFollowingPdf).goNumber()).isEqualTo("G.O.(Ms).No.10");
+    }
+
     private static byte[] sample(String name) throws Exception {
         return Files.readAllBytes(Path.of("src/test/resources/sample-documents/" + name));
     }

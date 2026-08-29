@@ -44,6 +44,12 @@ export function SearchPage() {
 
   const departments = useQuery({ queryKey: ['departments'], queryFn: fetchDepartments });
 
+  // A G.O. number is a compact token, not free prose, so a lone digit — "2" for G.O. No.2 — is a
+  // real search rather than the kind of noisy one-letter query the two-character minimum guards
+  // against. The server applies the same exemption; see DiscoveryService.DIGITS_ONLY.
+  const trimmedQuery = q.trim();
+  const queryIsSearchable = /^\d+$/.test(trimmedQuery) ? trimmedQuery.length >= 1 : trimmedQuery.length >= 2;
+
   const results = useQuery({
     queryKey: ['search', q, departmentId, category, from, to, page],
     queryFn: () =>
@@ -60,7 +66,7 @@ export function SearchPage() {
         page,
       ),
     // The server refuses anything shorter, so there is no point asking.
-    enabled: q.trim().length >= 2,
+    enabled: queryIsSearchable,
   });
 
   const setFacet = (key: string, value: string) => {
@@ -134,7 +140,7 @@ export function SearchPage() {
         />
       </div>
 
-      {q.trim().length < 2 ? (
+      {!queryIsSearchable ? (
         <Prompt />
       ) : results.isPending ? (
         <SkeletonRows count={4} label={`Searching for ${q}`} />
@@ -213,7 +219,7 @@ function Prompt() {
       </svg>
       <p className="mt-3 text-sm text-slate-500">
         Type at least two characters — a piece of the file name or a G.O. number — to look across
-        every department.
+        every department. A G.O. number can be searched by digits alone, even a single one.
       </p>
     </div>
   );

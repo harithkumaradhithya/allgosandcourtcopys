@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,14 @@ public class DiscoveryService {
 
     /** Below this, a search matches so much that the results are noise rather than an answer. */
     private static final int MIN_SEARCH_LENGTH = 2;
+
+    /**
+     * A query that is <em>only</em> digits is exempt from {@link #MIN_SEARCH_LENGTH}: a G.O. number
+     * is a compact token — "No.2" — not free prose, so a single digit is a real, deliberate search
+     * ("2" for G.O. No.2) rather than the kind of noisy one-letter-matches-everything query the
+     * general minimum guards against.
+     */
+    private static final Pattern DIGITS_ONLY = Pattern.compile("\\d+");
 
     private final StoredFileRepository fileRepository;
     private final FavoriteRepository favoriteRepository;
@@ -75,7 +84,8 @@ public class DiscoveryService {
      * Global search by part of a document's name, across every department.
      *
      * @param query at least two characters; anything shorter is refused rather than returning most
-     *     of the archive
+     *     of the archive — except a query of only digits, e.g. "2" for a G.O. number, which is
+     *     accepted at any length; see {@link #DIGITS_ONLY}
      * @param departmentId optional facet
      * @param category optional facet, matched against the folder the document sits in
      * @param from optional lower bound on the upload date
@@ -92,7 +102,8 @@ public class DiscoveryService {
             Pageable pageable) {
 
         String term = query == null ? "" : query.trim();
-        if (term.length() < MIN_SEARCH_LENGTH) {
+        int minLength = DIGITS_ONLY.matcher(term).matches() ? 1 : MIN_SEARCH_LENGTH;
+        if (term.length() < minLength) {
             throw ApiException.badRequest(
                     "SEARCH_TOO_SHORT", "Type at least %d characters to search.".formatted(MIN_SEARCH_LENGTH));
         }

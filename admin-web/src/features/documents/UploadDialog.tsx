@@ -19,6 +19,10 @@ interface Item {
   percent: number;
   /** The server's wording for a refusal — never invented here. */
   error?: string;
+  /** The Abstract paragraph the server read off the document itself, once it has finished uploading. */
+  description?: string | null;
+  /** The G.O. number read off the document, alongside the description. */
+  goNumber?: string | null;
 }
 
 /**
@@ -85,7 +89,13 @@ export function UploadDialog({
         if (refusal) {
           update(index, { status: 'failed', error: refusal.message });
         } else {
-          update(index, { status: 'done', percent: 100 });
+          const uploaded = result.uploaded[0];
+          update(index, {
+            status: 'done',
+            percent: 100,
+            description: uploaded?.description,
+            goNumber: uploaded?.goNumber,
+          });
         }
       } catch (error) {
         update(index, { status: 'failed', error: toApiError(error).message });
@@ -207,6 +217,19 @@ export function UploadDialog({
                   <p role="alert" className="mt-1.5 text-xs font-medium text-red-700">
                     {item.error}
                   </p>
+                )}
+
+                {/* Read off the document itself, so it's worth showing right away rather than
+                    making the uploader open the file back up to see what the server made of it. */}
+                {item.status === 'done' && item.description && (
+                  <div className="mt-1.5 border-t border-emerald-100 pt-1.5">
+                    {item.goNumber && (
+                      <p className="text-xs font-semibold text-navy-700">{item.goNumber}</p>
+                    )}
+                    <p className="line-clamp-2 text-xs text-slate-600" title={item.description}>
+                      {item.description}
+                    </p>
+                  </div>
                 )}
               </li>
             ))}

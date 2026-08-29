@@ -128,6 +128,16 @@ class DiscoveryServiceTest {
         }
 
         @Test
+        @DisplayName("a single digit is accepted, since a G.O. number is a compact token rather than free prose")
+        void acceptsASingleDigitEvenBelowTheGeneralMinimum() {
+            givenNoResults();
+
+            service.search("2", null, null, null, null, viewer, PAGE);
+
+            assertThat(capturedPattern()).isEqualTo("%2%");
+        }
+
+        @Test
         @DisplayName("LIKE wildcards in the query are matched literally")
         void escapesWildcards() {
             givenNoResults();

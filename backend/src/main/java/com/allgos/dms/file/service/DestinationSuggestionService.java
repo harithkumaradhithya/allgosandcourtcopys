@@ -55,34 +55,38 @@ public class DestinationSuggestionService {
             return SuggestedDestination.NONE;
         }
 
-        String departmentHint;
+        DocumentAbstractExtractor.Extraction extraction;
         try {
-            departmentHint = extractor.extract(part.getBytes()).departmentHint();
+            extraction = extractor.extract(part.getBytes());
         } catch (IOException ex) {
             log.warn("Could not read {} to suggest a destination", part.getOriginalFilename(), ex);
             return SuggestedDestination.NONE;
         }
+        String goNumber = extraction.goNumber();
 
         List<Department> departments = departmentRepository.findByActiveTrueOrderByNameAsc();
-        Optional<Department> department = matcher.match(departmentHint, departments);
+        Optional<Department> department = matcher.match(extraction.departmentHint(), departments);
         if (department.isEmpty()) {
-            return SuggestedDestination.NONE;
+            // No department guess, but the G.O. number can still stand on its own — see the class
+            // Javadoc on SuggestedDestination.
+            return new SuggestedDestination(null, null, null, null, goNumber);
         }
 
         Optional<Folder> general = folderRepository.findByDepartmentIdAndParentIsNullAndNameIgnoreCase(
                 department.get().getId(), GENERAL_FOLDER_NAME);
         if (general.isEmpty()) {
             // Should not happen once V10 has run, but a missing General folder is a reason to fall
-            // back to "no suggestion" rather than to name a department with nowhere to file into.
+            // back to no department suggestion rather than to name one with nowhere to file into.
             log.warn("Department {} has no General folder", department.get().getName());
-            return SuggestedDestination.NONE;
+            return new SuggestedDestination(null, null, null, null, goNumber);
         }
 
         return new SuggestedDestination(
                 department.get().getId(),
                 department.get().getName(),
                 general.get().getId(),
-                general.get().getName());
+                general.get().getName(),
+                goNumber);
     }
 
     /**

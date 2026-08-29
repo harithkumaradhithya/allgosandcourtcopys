@@ -29,9 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Registration review and member administration.
  *
- * <p>The {@code @PreAuthorize} sits on the class, so every method added here is admin-only by
- * default and a new endpoint cannot be left unguarded by forgetting an annotation. A member reaching
- * any of these gets 403 with {@code ACCESS_DENIED}, whatever the web app happens to show them.
+ * <p>
+ * The {@code @PreAuthorize} sits on the class, so every method added here is
+ * admin-only by
+ * default and a new endpoint cannot be left unguarded by forgetting an
+ * annotation. A member reaching
+ * any of these gets 403 with {@code ACCESS_DENIED}, whatever the web app
+ * happens to show them.
  */
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -46,9 +50,13 @@ public class AdminUserController {
         this.adminUserService = adminUserService;
     }
 
-    // ------------------------------------------------------------- registration queue
+    // ------------------------------------------------------------- registration
+    // queue
 
-    /** @param status omit, or pass "all", to see reviewed requests alongside pending ones */
+    /**
+     * @param status omit, or pass "all", to see reviewed requests alongside pending
+     *               ones
+     */
     @GetMapping("/registration-requests")
     public PageResponse<RegistrationRequestView> listRegistrationRequests(
             @RequestParam(defaultValue = "pending") String status,
@@ -78,7 +86,8 @@ public class AdminUserController {
         return adminUserService.reject(id, request.reason(), principal.user());
     }
 
-    // ---------------------------------------------------------------------- members
+    // ----------------------------------------------------------------------
+    // members
 
     @GetMapping("/members")
     public PageResponse<MemberView> listMembers(
@@ -104,7 +113,8 @@ public class AdminUserController {
     }
 
     /**
-     * Grant or withdraw administrative access. Admin-only like everything on this class, so only an
+     * Grant or withdraw administrative access. Admin-only like everything on this
+     * class, so only an
      * admin can make one.
      */
     @PatchMapping("/members/{id}/role")
@@ -115,9 +125,13 @@ public class AdminUserController {
         return adminUserService.changeRole(id, request.role(), principal.user());
     }
 
-    // ------------------------------------------------------------------------ helpers
+    // ------------------------------------------------------------------------
+    // helpers
 
-    /** Newest first, and the page size is capped so one request cannot ask for the whole table. */
+    /**
+     * Newest first, and the page size is capped so one request cannot ask for the
+     * whole table.
+     */
     private Pageable pageable(int page, int size) {
         return PageRequest.of(
                 Math.max(page, 0),
