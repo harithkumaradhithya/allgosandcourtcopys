@@ -43,6 +43,15 @@ public class LetterTemplate extends BaseEntity {
     private String salutation;
 
     /**
+     * Which language's letters this template is for.
+     *
+     * <p>A template's wording is in one language, so it belongs to that language's chooser. The
+     * letter written from it starts in the same language.
+     */
+    @Column(nullable = false)
+    private LetterLanguage language = LetterLanguage.EN;
+
+    /**
      * Retired rather than deleted once letters exist. Removing a template people have already
      * written from would either take those letters with it or leave them pointing at nothing.
      */

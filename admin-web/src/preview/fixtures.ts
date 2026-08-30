@@ -269,6 +269,7 @@ const LETTER_TEMPLATES = [
     defaultSubject: 'Convening of Purchase Committee Meeting - Request to attend the meeting - Reg.',
     body: 'Kind attention is invited to the references cited.',
     salutation: 'Sir/Madam,',
+    language: 'EN',
     active: true,
     updatedAt: '2026-08-20T05:00:00Z',
   },
@@ -279,8 +280,20 @@ const LETTER_TEMPLATES = [
     defaultSubject: null,
     body: null,
     salutation: 'Sir/Madam,',
+    language: 'EN',
     active: true,
     updatedAt: '2026-08-19T05:00:00Z',
+  },
+  {
+    id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+    name: 'கூட்டத்திற்கான அழைப்பு',
+    description: 'குழுக் கூட்டம் கூட்டுவதற்கு',
+    defaultSubject: 'கொள்முதல் குழுக் கூட்டம் கூட்டுதல் - கலந்து கொள்ளக் கோருதல் - சார்பு.',
+    body: 'மேற்படி பார்வையில் கண்டுள்ளவாறு தெரிவிக்கப்படுகிறது.',
+    salutation: 'ஐயா/அம்மா,',
+    language: 'TA',
+    active: true,
+    updatedAt: '2026-08-20T05:00:00Z',
   },
 ];
 
@@ -292,6 +305,8 @@ const LETTER = {
   id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1',
   templateId: LETTER_TEMPLATES[0].id,
   templateName: 'Meeting invitation',
+  language: 'EN',
+  status: 'FINAL',
   referenceNo: 'DBC/52/2026-D3',
   letterDate: '2026-08-22',
   fromBlock:
@@ -316,7 +331,7 @@ const LETTER = {
  * URL → response. Matched in order, first hit wins, so put the specific patterns above the general
  * ones — `/files/search` before `/files/{id}`.
  */
-const ROUTES: [RegExp, (url: string) => unknown][] = [
+const ROUTES: [RegExp, (url: string, params?: Record<string, unknown>) => unknown][] = [
   [/\/auth\/refresh$/, () => ({ accessToken: 'preview-token', expiresInSeconds: 900, user: ADMIN_USER })],
   [/\/auth\/departments$/, () => DEPARTMENTS.map(({ id, name }) => ({ id, name }))],
 
@@ -333,30 +348,51 @@ const ROUTES: [RegExp, (url: string) => unknown][] = [
       defaultSubject: null,
       body: null,
       salutation: null,
+      language: 'EN',
       // Retired, so the admin list has one to show and the chooser above does not.
       active: false,
       updatedAt: '2026-06-01T05:00:00Z',
     },
   ]],
   [/\/letters\/[0-9a-f-]+$/, () => LETTER],
-  [/\/letters$/, () => page([
-    {
-      id: LETTER.id,
-      referenceNo: LETTER.referenceNo,
-      letterDate: LETTER.letterDate,
-      subject: LETTER.subject,
-      templateName: LETTER.templateName,
-      updatedAt: LETTER.updatedAt,
-    },
-    {
-      id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2',
-      referenceNo: 'DBC/48/2026-D3',
-      letterDate: '2026-08-11',
-      subject: 'Supply of Modern Bicycles - Inspection of stock - Reg.',
-      templateName: 'Covering letter',
-      updatedAt: '2026-08-11T09:15:00Z',
-    },
-  ])],
+  // The drafts and the finished letters are the same endpoint with a different status, so the
+  // fixture has to read the parameter too — otherwise the list screen shows its drafts twice.
+  [/\/letters$/, (_url, params) =>
+    params?.status === 'DRAFT'
+      ? page([
+          {
+            id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3',
+            referenceNo: null,
+            letterDate: '2026-08-23',
+            subject: 'Modern Bicycles - stock position as on 23.08.2026 - Reg.',
+            templateName: 'Meeting invitation',
+            language: 'EN',
+            status: 'DRAFT',
+            updatedAt: '2026-08-23T11:02:00Z',
+          },
+        ])
+      : page([
+          {
+            id: LETTER.id,
+            referenceNo: LETTER.referenceNo,
+            letterDate: LETTER.letterDate,
+            subject: LETTER.subject,
+            templateName: LETTER.templateName,
+            language: 'EN',
+            status: 'FINAL',
+            updatedAt: LETTER.updatedAt,
+          },
+          {
+            id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2',
+            referenceNo: 'DBC/48/2026-D3',
+            letterDate: '2026-08-11',
+            subject: 'Supply of Modern Bicycles - Inspection of stock - Reg.',
+            templateName: 'Covering letter',
+            language: 'TA',
+            status: 'FINAL',
+            updatedAt: '2026-08-11T09:15:00Z',
+          },
+        ])],
 
   [/\/phonebook\/departments$/, () => [
     {
@@ -696,7 +732,7 @@ export const fixtureAdapter: AxiosAdapter = async (config: AxiosRequestConfig) =
   for (const [pattern, respond] of ROUTES) {
     if (pattern.test(url)) {
       return {
-        data: respond(url),
+        data: respond(url, config.params as Record<string, unknown> | undefined),
         status: 200,
         statusText: 'OK',
         headers: {},

@@ -13,8 +13,9 @@ import {
   updateTemplate,
   type TemplateDraft,
 } from '@/features/letters/api';
+import { LETTER_LANGUAGES, LETTER_TEXT } from '@/features/letters/language';
 import { toApiError } from '@/lib/errors';
-import type { LetterTemplate } from '@/types/api';
+import type { LetterLanguage, LetterTemplate } from '@/types/api';
 
 const EMPTY: TemplateDraft = {
   name: '',
@@ -22,6 +23,7 @@ const EMPTY: TemplateDraft = {
   defaultSubject: '',
   body: '',
   salutation: 'Sir/Madam,',
+  language: 'EN',
   active: true,
 };
 
@@ -94,6 +96,13 @@ export function LetterTemplatesPage() {
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-slate-900">
                   {template.name}
+                  <span
+                    lang={template.language === 'TA' ? 'ta' : 'en'}
+                    className="ml-2 rounded-full bg-navy-50 px-2 py-0.5 text-xs font-semibold
+                      text-navy-700 ring-1 ring-inset ring-navy-500/15"
+                  >
+                    {LETTER_LANGUAGES.find((option) => option.code === template.language)?.label}
+                  </span>
                   {!template.active && (
                     <span
                       className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold
@@ -216,6 +225,7 @@ function TemplateForm({
           defaultSubject: editing.defaultSubject ?? '',
           body: editing.body ?? '',
           salutation: editing.salutation ?? '',
+          language: editing.language,
           active: editing.active,
         }
       : EMPTY,
@@ -229,10 +239,55 @@ function TemplateForm({
   const set = (field: keyof TemplateDraft) => (value: string | boolean) =>
     setDraft((current) => ({ ...current, [field]: value }));
 
+  /**
+   * Changing a template's language changes the letters written from it, so the salutation follows
+   * along while it is still the stock one. A wording an admin typed themselves is left alone.
+   */
+  const setLanguage = (language: LetterLanguage) =>
+    setDraft((current) => {
+      const stock = Object.values(LETTER_TEXT).some(
+        (candidate) => candidate.defaultSalutation === current.salutation.trim(),
+      );
+      return {
+        ...current,
+        language,
+        salutation:
+          current.salutation.trim() === '' || stock
+            ? LETTER_TEXT[language].defaultSalutation
+            : current.salutation,
+      };
+    });
+
   const fieldErrors = save.isError ? (toApiError(save.error).fieldErrors ?? {}) : {};
 
   return (
     <div className="space-y-4">
+      <div>
+        <span className="block text-sm font-medium text-slate-700">Language</span>
+        <div className="mt-2 flex gap-2" role="group" aria-label="Template language">
+          {LETTER_LANGUAGES.map((option) => (
+            <button
+              key={option.code}
+              type="button"
+              aria-pressed={draft.language === option.code}
+              onClick={() => setLanguage(option.code)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold outline-none
+                transition-[background-color,color] duration-[--duration-quick]
+                focus-visible:ring-2 focus-visible:ring-navy-300 ${
+                  draft.language === option.code
+                    ? 'bg-navy-600 text-white'
+                    : 'bg-surface-sunken text-slate-600 hover:bg-navy-50'
+                }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-sm text-slate-500">
+          Which chooser it appears in. A letter written from it prints that language's headings.
+        </p>
+      </div>
+
       <TextField
         label="Name"
         value={draft.name}

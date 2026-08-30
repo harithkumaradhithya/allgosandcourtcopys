@@ -101,7 +101,8 @@ class LetterIT extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].id").value(id))
                 .andExpect(jsonPath("$[0].name").value("Meeting invitation"))
                 .andExpect(jsonPath("$[0].defaultSubject").value("Request to attend the meeting - Reg."))
-                .andExpect(jsonPath("$[0].salutation").value("Sir/Madam,"));
+                .andExpect(jsonPath("$[0].salutation").value("Sir/Madam,"))
+                .andExpect(jsonPath("$[0].language").value("EN"));
     }
 
     @Test
@@ -256,10 +257,191 @@ class LetterIT extends AbstractIntegrationTest {
         assertThat(letterRepository.count()).isZero();
     }
 
+    // --------------------------------------------------------------------------- language
+
+    @Test
+    @DisplayName("a Tamil letter is saved and reopened as a Tamil letter")
+    void theLanguageTravelsWithTheLetter() throws Exception {
+        Map<String, Object> tamil = letterBody(null, "கொள்முதல் குழுக் கூட்டம்");
+        tamil.put("language", "TA");
+        tamil.put("salutation", "ஐயா/அம்மா,");
+
+        String letterId = objectMapper
+                .readTree(mockMvc.perform(post("/api/v1/letters")
+                                .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(tamil)))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("id")
+                .asText();
+
+        // Reopened as Tamil, because the headings the sheet prints are read off this and nothing
+        // else. A letter that came back as EN would print "From," and "Sub:" on a Tamil letter.
+        mockMvc.perform(get("/api/v1/letters/{id}", letterId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.language").value("TA"))
+                .andExpect(jsonPath("$.salutation").value("ஐயா/அம்மா,"));
+
+        mockMvc.perform(get("/api/v1/letters").header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(jsonPath("$.items[0].language").value("TA"));
+    }
+
+    @Test
+    @DisplayName("a letter that says nothing about its language is English")
+    void theLanguageDefaultsRatherThanFailing() throws Exception {
+        String letterId = createLetter(memberToken, null, "A letter from an older client");
+
+        mockMvc.perform(get("/api/v1/letters/{id}", letterId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(jsonPath("$.language").value("EN"));
+    }
+
+    // ----------------------------------------------------------------------------- drafts
+
+    @Test
+    @DisplayName("a half-written letter is kept as a draft, listed apart, and finished later")
+    void aDraftIsKeptAndPickedUpAgain() throws Exception {
+        // Nothing but a subject: exactly the letter POST /letters refuses, and exactly what somebody
+        // has after two minutes of typing.
+        Map<String, Object> started = new HashMap<>();
+        started.put("subject", "Purchase Committee meeting");
+        started.put("language", "EN");
+
+        String draftId = objectMapper
+                .readTree(mockMvc.perform(post("/api/v1/letters/drafts")
+                                .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(started)))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.status").value("DRAFT"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("id")
+                .asText();
+
+        // Not among the letters — a draft is not something that was sent...
+        mockMvc.perform(get("/api/v1/letters").header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(jsonPath("$.totalItems").value(0));
+
+        // ...but it is there to come back to.
+        mockMvc.perform(get("/api/v1/letters")
+                        .param("status", "DRAFT")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(draftId))
+                .andExpect(jsonPath("$.items[0].status").value("DRAFT"));
+
+        // Autosaved again as more is written, into the same row rather than a second one.
+        started.put("body", "It is proposed to convene the meeting on 24.08.2026.");
+        mockMvc.perform(put("/api/v1/letters/drafts/{id}", draftId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(started)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+
+        assertThat(letterRepository.count()).isEqualTo(1);
+
+        // Finishing it promotes that same row: the draft becomes the letter, not a copy beside it.
+        mockMvc.perform(put("/api/v1/letters/{id}", draftId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                letterBody(null, "Purchase Committee meeting"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FINAL"));
+
+        assertThat(letterRepository.count()).isEqualTo(1);
+        mockMvc.perform(get("/api/v1/letters")
+                        .param("status", "DRAFT")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(jsonPath("$.totalItems").value(0));
+        mockMvc.perform(get("/api/v1/letters").header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(jsonPath("$.totalItems").value(1));
+    }
+
+    @Test
+    @DisplayName("an autosave still in flight does not drag a finished letter back into the drafts")
+    void autosavingAFinishedLetterKeepsTheEditButNotTheStatus() throws Exception {
+        String letterId = createLetter(memberToken, null, "Purchase Committee meeting");
+
+        Map<String, Object> edit = letterBody(null, "Purchase Committee meeting");
+        edit.put("body", "The meeting has moved to 4.00 PM.");
+
+        mockMvc.perform(put("/api/v1/letters/drafts/{id}", letterId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(edit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.body").value("The meeting has moved to 4.00 PM."))
+                .andExpect(jsonPath("$.status").value("FINAL"));
+    }
+
+    @Test
+    @DisplayName("a draft belongs to whoever was writing it, and nobody else can reach it")
+    void draftsAreTheirAuthorsOwn() throws Exception {
+        Map<String, Object> started = new HashMap<>();
+        started.put("subject", "Half a letter");
+
+        String draftId = objectMapper
+                .readTree(mockMvc.perform(post("/api/v1/letters/drafts")
+                                .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(started)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("id")
+                .asText();
+
+        for (String token : new String[] {otherToken, adminToken}) {
+            mockMvc.perform(get("/api/v1/letters")
+                            .param("status", "DRAFT")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                    .andExpect(jsonPath("$.totalItems").value(0));
+
+            mockMvc.perform(put("/api/v1/letters/drafts/{id}", draftId)
+                            .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(started)))
+                    .andExpect(status().isNotFound());
+
+            mockMvc.perform(delete("/api/v1/letters/drafts/{id}", draftId)
+                            .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                    .andExpect(status().isNotFound());
+        }
+
+        // Its author throws it away, and nothing is left behind.
+        mockMvc.perform(delete("/api/v1/letters/drafts/{id}", draftId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(status().isNoContent());
+
+        assertThat(letterRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("a letter that was finished is deleted, not discarded as a draft")
+    void discardingRefusesAFinishedLetter() throws Exception {
+        String letterId = createLetter(memberToken, null, "Purchase Committee meeting");
+
+        mockMvc.perform(delete("/api/v1/letters/drafts/{id}", letterId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("NOT_A_DRAFT"));
+
+        assertThat(letterRepository.count()).isEqualTo(1);
+    }
+
     @Test
     @DisplayName("signed out, there are no letters and no templates")
     void anonymousReachesNothing() throws Exception {
         mockMvc.perform(get("/api/v1/letters")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/letters/drafts")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/letters/templates")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/admin/letter-templates")).andExpect(status().isUnauthorized());
     }
@@ -291,6 +473,7 @@ class LetterIT extends AbstractIntegrationTest {
                         "defaultSubject", subject,
                         "salutation", "Sir/Madam,",
                         "body", "Kind attention is invited to the references cited.",
+                        "language", "EN",
                         "active", true))));
     }
 

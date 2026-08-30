@@ -1,6 +1,8 @@
 package com.allgos.dms.letter.dto;
 
 import com.allgos.dms.letter.entity.Letter;
+import com.allgos.dms.letter.entity.LetterLanguage;
+import com.allgos.dms.letter.entity.LetterStatus;
 import com.allgos.dms.letter.entity.LetterTemplate;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -17,6 +19,7 @@ public final class LetterResponses {
             String defaultSubject,
             String body,
             String salutation,
+            LetterLanguage language,
             boolean active,
             Instant updatedAt) {
 
@@ -28,6 +31,7 @@ public final class LetterResponses {
                     template.getDefaultSubject(),
                     template.getBody(),
                     template.getSalutation(),
+                    template.getLanguage(),
                     template.isActive(),
                     template.getUpdatedAt());
         }
@@ -45,6 +49,8 @@ public final class LetterResponses {
             String templateName,
             String referenceNo,
             LocalDate letterDate,
+            LetterLanguage language,
+            LetterStatus status,
             String fromBlock,
             String toBlock,
             String salutation,
@@ -64,6 +70,8 @@ public final class LetterResponses {
                     letter.getTemplate() == null ? null : letter.getTemplate().getName(),
                     letter.getReferenceNo(),
                     letter.getLetterDate(),
+                    letter.getLanguage(),
+                    letter.getStatus(),
                     letter.getFromBlock(),
                     letter.getToBlock(),
                     letter.getSalutation(),
@@ -90,6 +98,8 @@ public final class LetterResponses {
             LocalDate letterDate,
             String subject,
             String templateName,
+            LetterLanguage language,
+            LetterStatus status,
             Instant updatedAt) {
 
         public static LetterSummary from(Letter letter) {
@@ -99,6 +109,8 @@ public final class LetterResponses {
                     letter.getLetterDate(),
                     letter.getSubject(),
                     letter.getTemplate() == null ? null : letter.getTemplate().getName(),
+                    letter.getLanguage(),
+                    letter.getStatus(),
                     letter.getUpdatedAt());
         }
     }

@@ -12,6 +12,22 @@ export function formatDateTime(iso: string | null): string {
 }
 
 /**
+ * The time of day alone, in the office's zone.
+ *
+ * <p>For the things that happened a moment ago and will be read a moment later — an autosave, a
+ * draft kept while the network was down. The date would be noise: it is today, or the reader would
+ * not be looking at it.
+ */
+export function formatTime(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
+/**
  * Whole days from now until an ISO instant, rounded up — "1 day left" still means today, not
  * tomorrow, if there are fifteen hours left in it. Negative once the moment has passed, though
  * nothing should still be showing a countdown by then; the daily sweep runs well before that.

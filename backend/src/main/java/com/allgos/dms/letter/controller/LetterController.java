@@ -6,6 +6,7 @@ import com.allgos.dms.letter.dto.LetterRequests;
 import com.allgos.dms.letter.dto.LetterResponses.LetterSummary;
 import com.allgos.dms.letter.dto.LetterResponses.LetterView;
 import com.allgos.dms.letter.dto.LetterResponses.TemplateView;
+import com.allgos.dms.letter.entity.LetterStatus;
 import com.allgos.dms.letter.service.LetterService;
 import com.allgos.dms.letter.service.LetterTemplateService;
 import jakarta.validation.Valid;
@@ -51,13 +52,21 @@ public class LetterController {
         return templateService.listActive();
     }
 
+    /**
+     * The caller's own letters.
+     *
+     * <p>Finished ones unless the caller asks for drafts. Two listings rather than one mixed list:
+     * a draft is not something that was sent, and a screen that showed both together would be asking
+     * the reader to tell them apart by a badge.
+     */
     @GetMapping
     public PageResponse<LetterSummary> mine(
+            @RequestParam(defaultValue = "FINAL") LetterStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal AuthenticatedUser principal) {
 
-        return letterService.listMine(principal.user(), pageable(page, size));
+        return letterService.listMine(principal.user(), status, pageable(page, size));
     }
 
     @GetMapping("/{letterId}")
@@ -79,6 +88,37 @@ public class LetterController {
             @Valid @RequestBody LetterRequests.SaveLetter request,
             @AuthenticationPrincipal AuthenticatedUser principal) {
         return letterService.update(letterId, request, principal.user());
+    }
+
+    // ---------------------------------------------------------------------------- drafts
+
+    /**
+     * Autosave, while somebody is writing.
+     *
+     * <p>Separate from {@code POST /letters} because it accepts a letter that is not finished — the
+     * requirements a letter has are exactly what an autosave cannot enforce. It is called on a timer,
+     * so it is quiet: nothing is audited and no notification comes of it.
+     */
+    @PostMapping("/drafts")
+    public LetterView createDraft(
+            @Valid @RequestBody LetterRequests.SaveDraft request,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        return letterService.createDraft(request, principal.user());
+    }
+
+    @PutMapping("/drafts/{letterId}")
+    public LetterView updateDraft(
+            @PathVariable UUID letterId,
+            @Valid @RequestBody LetterRequests.SaveDraft request,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        return letterService.updateDraft(letterId, request, principal.user());
+    }
+
+    @DeleteMapping("/drafts/{letterId}")
+    public ResponseEntity<Void> discardDraft(
+            @PathVariable UUID letterId, @AuthenticationPrincipal AuthenticatedUser principal) {
+        letterService.discardDraft(letterId, principal.user());
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{letterId}")

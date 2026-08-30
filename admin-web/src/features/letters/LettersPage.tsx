@@ -6,26 +6,42 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { deleteLetter, fetchMyLetters, fetchTemplates } from '@/features/letters/api';
+import {
+  deleteLetter,
+  discardDraft,
+  fetchMyLetters,
+  fetchTemplates,
+} from '@/features/letters/api';
+import { forgetDraft } from '@/features/letters/draft-storage';
 import { formatLetterDate } from '@/features/letters/format';
+import { LETTER_LANGUAGES } from '@/features/letters/language';
+import { useAuth } from '@/lib/auth-context';
 import { toApiError } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
-import type { LetterSummary, LetterTemplate } from '@/types/api';
+import type { LetterLanguage, LetterSummary, LetterTemplate } from '@/types/api';
 
 /**
  * The letters this person has written, and the way into a new one.
  *
  * <p>A letter belongs to whoever wrote it: this list is scoped to the caller by the server, and
  * there is deliberately no screen anywhere that shows somebody else's drafts.
+ *
+ * <p><b>Drafts sit above the letters, not among them.</b> They are the opposite kind of thing — one
+ * is a document that was issued, the other is a job half done — and a single list distinguishing
+ * them by a badge would invite exactly the mistake of printing an unfinished letter.
  */
 export function LettersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [choosing, setChoosing] = useState(false);
+  const [language, setLanguage] = useState<LetterLanguage>('EN');
   const [confirming, setConfirming] = useState<LetterSummary | null>(null);
 
-  const letters = useQuery({ queryKey: ['letters', 'mine'], queryFn: () => fetchMyLetters() });
+  const letters = useQuery({ queryKey: ['letters', 'mine'], queryFn: () => fetchMyLetters('FINAL') });
+  const drafts = useQuery({ queryKey: ['letters', 'drafts'], queryFn: () => fetchMyLetters('DRAFT') });
+
   const templates = useQuery({
     queryKey: ['letters', 'templates'],
     queryFn: fetchTemplates,
@@ -35,28 +51,91 @@ export function LettersPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (letter: LetterSummary) => deleteLetter(letter.id),
-    onSuccess: () => {
+    // Throwing away a draft is not the same act as deleting a letter that was issued, and the audit
+    // log should not record it as one: nothing was ever sent.
+    mutationFn: (letter: LetterSummary) =>
+      letter.status === 'DRAFT' ? discardDraft(letter.id) : deleteLetter(letter.id),
+    onSuccess: (_removed, letter) => {
+      // The copy on this machine goes with it. Somebody who discards a draft has decided; being
+      // offered it back on the next new letter would be the application arguing about it.
+      if (user) forgetDraft(user.id, letter.id);
+
       setConfirming(null);
       void queryClient.invalidateQueries({ queryKey: ['letters'] });
     },
   });
 
   const items = letters.data?.items ?? [];
+  const unfinished = drafts.data?.items ?? [];
   const error = letters.error ?? remove.error;
 
   const start = (template: LetterTemplate | null) => {
     setChoosing(false);
-    navigate(template ? `/letters/new?template=${template.id}` : '/letters/new');
+    const query = template ? `?template=${template.id}` : `?lang=${language}`;
+    navigate(`/letters/new${query}`);
   };
+
+  /** The templates for the language being written in; the chooser never mixes the two. */
+  const offered = (templates.data ?? []).filter((template) => template.language === language);
 
   return (
     <AppShell
       title="Letters"
-      subtitle="Write from a template, save it, and print or save as PDF"
+      subtitle="Write from a template in English or Tamil, save it, and print or save as PDF"
       actions={<Button onClick={() => setChoosing(true)}>New letter</Button>}
     >
       {error && <Alert tone="error">{toApiError(error).message}</Alert>}
+
+      {unfinished.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Unfinished — pick up where you left off
+          </h2>
+          <ul className="space-y-3">
+            {unfinished.map((letter) => (
+              <li
+                key={letter.id}
+                className="group/row flex flex-wrap items-center gap-4 rounded-xl border
+                  border-dashed border-line-strong bg-surface p-5 shadow-card
+                  transition-[border-color,box-shadow,background-color]
+                  duration-[--duration-quick] ease-[--ease-settle] hover:border-navy-400
+                  hover:bg-navy-50/40 hover:shadow-lifted"
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to={`/letters/${letter.id}`}
+                    className="block truncate font-medium text-slate-900 outline-none
+                      transition-colors duration-[--duration-base] group-hover/row:text-navy-800
+                      focus-visible:text-navy-800"
+                  >
+                    {/* A draft is often abandoned before it has a subject, and "(no subject yet)" is
+                        the only honest thing to call it — an empty row is unclickable. */}
+                    {letter.subject.trim() || 'Letter with no subject yet'}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    <LanguageTag language={letter.language} /> · last edited{' '}
+                    {formatDateTime(letter.updatedAt)}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => navigate(`/letters/${letter.id}`)}>
+                    Continue
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600! hover:bg-red-50!"
+                    onClick={() => setConfirming(letter)}
+                  >
+                    Discard
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {letters.isPending ? (
         <SkeletonRows count={4} label="Loading your letters" />
@@ -91,6 +170,7 @@ export function LettersPage() {
                   {letter.subject}
                 </Link>
                 <p className="mt-0.5 text-xs text-slate-500">
+                  <LanguageTag language={letter.language} /> ·{' '}
                   {letter.referenceNo && <>Lr.No.{letter.referenceNo} · </>}
                   {letter.letterDate && <>{formatLetterDate(letter.letterDate)} · </>}
                   {letter.templateName ?? 'No template'} · edited {formatDateTime(letter.updatedAt)}
@@ -116,11 +196,34 @@ export function LettersPage() {
       )}
 
       <Modal open={choosing} onClose={() => setChoosing(false)} title="Choose a template">
+        {/* Language first, because it decides which templates there are to choose from. An office
+            writing in both keeps two sets of standing wording, and mixing them in one list would
+            mean scrolling past the ones you cannot use. */}
+        <div className="mb-4 flex gap-2" role="group" aria-label="Letter language">
+          {LETTER_LANGUAGES.map((option) => (
+            <button
+              key={option.code}
+              type="button"
+              aria-pressed={language === option.code}
+              onClick={() => setLanguage(option.code)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold outline-none
+                transition-[background-color,color] duration-[--duration-quick]
+                focus-visible:ring-2 focus-visible:ring-navy-300 ${
+                  language === option.code
+                    ? 'bg-navy-600 text-white'
+                    : 'bg-surface-sunken text-slate-600 hover:bg-navy-50'
+                }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         {templates.isPending ? (
           <SkeletonRows count={3} label="Loading templates" />
         ) : (
           <div className="space-y-2">
-            {(templates.data ?? []).map((template) => (
+            {offered.map((template) => (
               <button
                 key={template.id}
                 type="button"
@@ -156,10 +259,14 @@ export function LettersPage() {
         )}
       </Modal>
 
-      <Modal open={confirming !== null} onClose={() => setConfirming(null)} title="Delete this letter?">
+      <Modal
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title={confirming?.status === 'DRAFT' ? 'Discard this draft?' : 'Delete this letter?'}
+      >
         <p className="text-sm text-slate-600">
-          “{confirming?.subject}” will be removed. Nothing else in the system refers to it, so this
-          cannot be undone.
+          “{confirming?.subject.trim() || 'Letter with no subject yet'}” will be removed. Nothing
+          else in the system refers to it, so this cannot be undone.
         </p>
         <div className="flex justify-end gap-2 pt-4">
           <Button variant="secondary" onClick={() => setConfirming(null)}>
@@ -170,10 +277,16 @@ export function LettersPage() {
             loading={remove.isPending}
             onClick={() => confirming && remove.mutate(confirming)}
           >
-            Delete
+            {confirming?.status === 'DRAFT' ? 'Discard' : 'Delete'}
           </Button>
         </div>
       </Modal>
     </AppShell>
   );
+}
+
+/** Which language a letter is in, on the one line a list row has to say it. */
+function LanguageTag({ language }: { language: LetterLanguage }) {
+  const option = LETTER_LANGUAGES.find((candidate) => candidate.code === language);
+  return <span lang={language === 'TA' ? 'ta' : 'en'}>{option?.label ?? 'English'}</span>;
 }

@@ -8,6 +8,8 @@ import com.allgos.dms.letter.dto.LetterRequests;
 import com.allgos.dms.letter.dto.LetterResponses.LetterSummary;
 import com.allgos.dms.letter.dto.LetterResponses.LetterView;
 import com.allgos.dms.letter.entity.Letter;
+import com.allgos.dms.letter.entity.LetterLanguage;
+import com.allgos.dms.letter.entity.LetterStatus;
 import com.allgos.dms.letter.entity.LetterTemplate;
 import com.allgos.dms.letter.repository.LetterRepository;
 import com.allgos.dms.letter.repository.LetterTemplateRepository;
@@ -43,9 +45,11 @@ public class LetterService {
         this.auditService = auditService;
     }
 
+    /** The finished letters, or the drafts. Which one is the caller's to say. */
     @Transactional(readOnly = true)
-    public PageResponse<LetterSummary> listMine(User author, Pageable pageable) {
-        Page<Letter> page = letterRepository.findByAuthorIdOrderByCreatedAtDesc(author.getId(), pageable);
+    public PageResponse<LetterSummary> listMine(User author, LetterStatus status, Pageable pageable) {
+        Page<Letter> page = letterRepository.findByAuthorIdAndStatusOrderByUpdatedAtDesc(
+                author.getId(), status, pageable);
         return PageResponse.of(page, LetterSummary::from);
     }
 
@@ -70,12 +74,66 @@ public class LetterService {
     @Transactional
     public LetterView update(UUID letterId, LetterRequests.SaveLetter request, User author) {
         Letter letter = require(letterId, author);
+
+        // Saving a draft as a letter is the moment the letter comes into being, so it is recorded as
+        // a creation rather than an edit of something that was never issued.
+        boolean wasDraft = letter.getStatus() == LetterStatus.DRAFT;
         apply(letter, request);
 
-        auditService.record(author, AuditAction.LETTER_UPDATED, "letter", letter.getId(),
+        auditService.record(
+                author,
+                wasDraft ? AuditAction.LETTER_CREATED : AuditAction.LETTER_UPDATED,
+                "letter",
+                letter.getId(),
                 Map.of("subject", letter.getSubject()));
 
         return LetterView.from(letter);
+    }
+
+    // -------------------------------------------------------------------------- drafts
+
+    /**
+     * A letter still being written, kept as it is typed.
+     *
+     * <p>Called on a timer while somebody writes, which shapes everything about it: nothing is
+     * required, and nothing is audited. An autosave every few seconds would bury the audit log under
+     * the writing of a single letter, and a draft is not yet a thing that happened. The point of it
+     * is only that closing the browser, losing the network or restarting the server in the middle of
+     * a letter costs nothing.
+     *
+     * <p>The draft is the same row the finished letter will be. Saving it as a letter promotes it in
+     * place rather than leaving a copy of the half-written version behind.
+     */
+    @Transactional
+    public LetterView createDraft(LetterRequests.SaveDraft request, User author) {
+        Letter letter = new Letter();
+        letter.setAuthor(author);
+        applyDraft(letter, request);
+        letterRepository.save(letter);
+        return LetterView.from(letter);
+    }
+
+    @Transactional
+    public LetterView updateDraft(UUID letterId, LetterRequests.SaveDraft request, User author) {
+        Letter letter = require(letterId, author);
+
+        // A letter that has already been finished is not dragged back into the drafts by an autosave
+        // that was still in flight when its author pressed Save. The edit is kept, the status is not.
+        LetterStatus status = letter.getStatus();
+        applyDraft(letter, request);
+        letter.setStatus(status);
+
+        return LetterView.from(letter);
+    }
+
+    /** Throwing away a draft. Refuses on a finished letter, which is deleted rather than discarded. */
+    @Transactional
+    public void discardDraft(UUID letterId, User author) {
+        Letter letter = require(letterId, author);
+        if (letter.getStatus() != LetterStatus.DRAFT) {
+            throw ApiException.badRequest("NOT_A_DRAFT", "That letter has already been saved");
+        }
+        letterRepository.delete(letter);
     }
 
     @Transactional
@@ -100,14 +158,9 @@ public class LetterService {
     }
 
     private void apply(Letter letter, LetterRequests.SaveLetter request) {
-        LetterTemplate template = request.templateId() == null
-                ? null
-                : templateRepository
-                        .findById(request.templateId())
-                        .orElseThrow(() -> ApiException.badRequest(
-                                "TEMPLATE_INVALID", "That template no longer exists"));
-
-        letter.setTemplate(template);
+        letter.setTemplate(template(request.templateId()));
+        letter.setStatus(LetterStatus.FINAL);
+        letter.setLanguage(language(request.language()));
         letter.setReferenceNo(trimToNull(request.referenceNo()));
         letter.setLetterDate(request.letterDate());
         letter.setFromBlock(request.fromBlock().trim());
@@ -119,6 +172,48 @@ public class LetterService {
         letter.setEnclosure(trimToNull(request.enclosure()));
         letter.setCopyTo(trimToNull(request.copyTo()));
         letter.setSignOff(trimToNull(request.signOff()));
+    }
+
+    /**
+     * The same blocks, none of them required.
+     *
+     * <p>The four the schema declares NOT NULL are stored empty rather than null where the author has
+     * not reached them yet: for a draft "nothing written here yet" is a real state, and it is not the
+     * same statement as the column being absent.
+     */
+    private void applyDraft(Letter letter, LetterRequests.SaveDraft request) {
+        letter.setTemplate(template(request.templateId()));
+        letter.setStatus(LetterStatus.DRAFT);
+        letter.setLanguage(language(request.language()));
+        letter.setReferenceNo(trimToNull(request.referenceNo()));
+        letter.setLetterDate(request.letterDate());
+        letter.setFromBlock(trimToEmpty(request.fromBlock()));
+        letter.setToBlock(trimToEmpty(request.toBlock()));
+        letter.setSalutation(trimToNull(request.salutation()));
+        letter.setSubject(trimToEmpty(request.subject()));
+        letter.setReference(trimToNull(request.reference()));
+        letter.setBody(trimToEmpty(request.body()));
+        letter.setEnclosure(trimToNull(request.enclosure()));
+        letter.setCopyTo(trimToNull(request.copyTo()));
+        letter.setSignOff(trimToNull(request.signOff()));
+    }
+
+    private LetterTemplate template(UUID templateId) {
+        return templateId == null
+                ? null
+                : templateRepository
+                        .findById(templateId)
+                        .orElseThrow(() -> ApiException.badRequest(
+                                "TEMPLATE_INVALID", "That template no longer exists"));
+    }
+
+    /** English unless the caller says otherwise, which is what an older client sending nothing means. */
+    private static LetterLanguage language(LetterLanguage requested) {
+        return requested == null ? LetterLanguage.EN : requested;
+    }
+
+    private static String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private static String trimToNull(String value) {

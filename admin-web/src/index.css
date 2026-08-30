@@ -898,6 +898,50 @@ table th,
 }
 
 /**
+ * A letter written in its own sheet.
+ *
+ * Every block of the preview is editable in place, so a correction can be made where it is visible
+ * rather than in the box that produced it. The rules here are what keep that from looking like a
+ * form: no borders, no boxes, nothing that says "field" until the writer goes near it.
+ */
+.letter-editable {
+  outline: none;
+  border-radius: 3px;
+  /* An empty block still has to be big enough to aim at. */
+  min-height: 1.5em;
+  /* Slightly wider than the text so the tint never touches the letters themselves. */
+  margin-inline: -0.25rem;
+  padding-inline: 0.25rem;
+  transition: background-color var(--duration-quick) var(--ease-settle),
+    box-shadow var(--duration-quick) var(--ease-settle);
+}
+
+.letter-editable:hover {
+  background-color: color-mix(in oklab, var(--color-navy-500) 6%, transparent);
+}
+
+.letter-editable:focus,
+.letter-editable:focus-visible {
+  background-color: color-mix(in oklab, var(--color-navy-500) 9%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-navy-500) 35%, transparent);
+}
+
+/* What belongs in a block nobody has filled in yet. Drawn rather than stored, so it is never part
+   of the letter: it cannot be selected, copied or printed. */
+.letter-editable.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-slate-400);
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* A Tamil letter set in a Latin face falls back glyph by glyph and comes out ransom-note. The Tamil
+   faces below are the ones Windows and the phones in this office actually have. */
+.letter-sheet:lang(ta) {
+  font-family: 'Noto Sans Tamil', 'Latha', 'Nirmala UI', 'Bamini', var(--font-sans);
+}
+
+/**
  * Printing a letter.
  *
  * A letter is the one thing in this application that leaves the building on paper, and what comes
@@ -949,6 +993,30 @@ table th,
   /* Never break a signature away from the paragraph it signs, or a heading from its list. */
   .letter-sheet h2 {
     break-after: avoid;
+  }
+
+  /* A block nobody filled in is not part of the letter, and neither is the hint drawn inside it.
+     On screen they are the way into an empty block; on paper they would be an empty heading and a
+     line of grey italics under it. */
+  .letter-sheet [data-empty='true'] {
+    display: none !important;
+  }
+
+  .letter-editable {
+    background: none !important;
+    box-shadow: none !important;
+    margin-inline: 0 !important;
+    padding-inline: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .letter-editable.is-empty::before {
+    content: none !important;
+  }
+
+  /* Tamil in a serif Latin face is the same ransom-note problem as on screen. */
+  .letter-sheet:lang(ta) {
+    font-family: 'Noto Sans Tamil', 'Latha', 'Nirmala UI', sans-serif;
   }
 
   @page {

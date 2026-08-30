@@ -384,6 +384,17 @@ export interface ApiError {
 }
 
 /** A kind of letter, with the wording it starts from. Maintained by administrators. */
+/**
+ * Which language a letter is written and printed in.
+ *
+ * <p>A property of the document, not a preference of the reader: it decides the headings the sheet
+ * prints, so it is stored with the letter and travels with it to the printer.
+ */
+export type LetterLanguage = 'EN' | 'TA';
+
+/** A letter still being written, or one its author has finished. */
+export type LetterStatus = 'DRAFT' | 'FINAL';
+
 export interface LetterTemplate {
   id: string;
   name: string;
@@ -391,6 +402,7 @@ export interface LetterTemplate {
   defaultSubject: string | null;
   body: string | null;
   salutation: string | null;
+  language: LetterLanguage;
   active: boolean;
   updatedAt: string;
 }
@@ -408,6 +420,8 @@ export interface Letter {
   templateName: string | null;
   referenceNo: string | null;
   letterDate: string | null;
+  language: LetterLanguage;
+  status: LetterStatus;
   fromBlock: string;
   toBlock: string;
   salutation: string | null;
@@ -428,5 +442,7 @@ export interface LetterSummary {
   letterDate: string | null;
   subject: string;
   templateName: string | null;
+  language: LetterLanguage;
+  status: LetterStatus;
   updatedAt: string;
 }

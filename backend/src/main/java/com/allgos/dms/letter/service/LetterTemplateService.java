@@ -5,6 +5,7 @@ import com.allgos.dms.audit.service.AuditService;
 import com.allgos.dms.common.exception.ApiException;
 import com.allgos.dms.letter.dto.LetterRequests;
 import com.allgos.dms.letter.dto.LetterResponses.TemplateView;
+import com.allgos.dms.letter.entity.LetterLanguage;
 import com.allgos.dms.letter.entity.LetterTemplate;
 import com.allgos.dms.letter.repository.LetterRepository;
 import com.allgos.dms.letter.repository.LetterTemplateRepository;
@@ -126,6 +127,7 @@ public class LetterTemplateService {
         template.setDefaultSubject(trimToNull(request.defaultSubject()));
         template.setBody(trimToNull(request.body()));
         template.setSalutation(trimToNull(request.salutation()));
+        template.setLanguage(request.language() == null ? LetterLanguage.EN : request.language());
         template.setActive(request.active());
     }
 

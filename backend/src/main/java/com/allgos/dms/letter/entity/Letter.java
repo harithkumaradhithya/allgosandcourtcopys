@@ -44,6 +44,14 @@ public class Letter extends BaseEntity {
     @Column(name = "letter_date")
     private LocalDate letterDate;
 
+    /** English or Tamil — decides the headings and labels the sheet prints, not only the wording. */
+    @Column(nullable = false)
+    private LetterLanguage language = LetterLanguage.EN;
+
+    /** A draft is a letter still being written; it is exempt from the blocks below being filled. */
+    @Column(nullable = false)
+    private LetterStatus status = LetterStatus.FINAL;
+
     @Column(name = "from_block", nullable = false, columnDefinition = "text")
     private String fromBlock;
 
