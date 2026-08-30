@@ -27,7 +27,6 @@ const ROUTES = [
   ['preview', '/files/33333333-3333-3333-3333-333333333331'],
   ['letters', '/letters'],
   ['letter', '/letters/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'],
-  ['letter-templates', '/admin/letter-templates'],
   ['my-uploads', '/my-uploads'], ['favorites', '/favorites'], ['downloads', '/downloads'],
   ['search', '/search?q=circular'], ['notifications', '/notifications'], ['profile', '/profile'],
   ['phonebook', '/phonebook'],

@@ -17,7 +17,6 @@ import { FilePreviewPage } from '@/features/documents/FilePreviewPage';
 import { FolderPage } from '@/features/documents/FolderPage';
 import { MyUploadsPage } from '@/features/documents/MyUploadsPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
-import { LetterTemplatesPage } from '@/features/admin/letters/LetterTemplatesPage';
 import { LetterEditorPage } from '@/features/letters/LetterEditorPage';
 import { LettersPage } from '@/features/letters/LettersPage';
 import { PhonebookPage } from '@/features/phonebook/PhonebookPage';
@@ -100,7 +99,6 @@ export function App() {
           <Route path="/admin/members" element={<MembersPage />} />
           <Route path="/admin/members/:memberId" element={<MemberActivityPage />} />
           <Route path="/admin/deletions" element={<DeletionsPage />} />
-          <Route path="/admin/letter-templates" element={<LetterTemplatesPage />} />
           <Route path="/admin/reports" element={<ReportsPage />} />
           <Route path="/admin/logs" element={<AuditLogPage />} />
           {/* Departments and folders are managed where they are browsed, so these older routes

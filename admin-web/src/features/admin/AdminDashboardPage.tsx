@@ -85,7 +85,6 @@ export function AdminDashboardPage() {
           { to: '/admin/members', label: 'Members' },
           { to: '/admin/reports', label: 'Reports' },
           { to: '/admin/deletions', label: 'Deleted documents' },
-          { to: '/admin/letter-templates', label: 'Letter templates' },
           { to: '/admin/logs', label: 'Activity log' },
         ].map((link) => (
           <Link

@@ -81,7 +81,7 @@ export interface FormLabels {
 interface LetterText {
   sheet: SheetLabels;
   form: FormLabels;
-  /** What a new letter opens with where the template says nothing. */
+  /** The salutation a new letter opens with in this language. */
   defaultSalutation: string;
   /** Shown in an empty block of the preview, to say what belongs there. Never printed. */
   placeholders: Record<keyof SheetLabels | 'body' | 'salutation' | 'signOff', string>;

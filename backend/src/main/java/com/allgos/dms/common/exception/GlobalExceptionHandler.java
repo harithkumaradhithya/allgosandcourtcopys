@@ -12,7 +12,9 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -52,6 +54,34 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleUploadSize(MaxUploadSizeExceededException ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ApiErrorResponse.of("FILE_TOO_LARGE", "That file exceeds the maximum upload size"));
+    }
+
+    /**
+     * A URL this API does not serve.
+     *
+     * <p>Without this it falls to the handler below and comes back as a 500 saying something went
+     * wrong — which sends whoever is looking at it hunting for a fault on the server when the real
+     * answer is that the address is wrong. Bookmarks outlive features, so this is the ordinary case
+     * after anything is removed, not an exceptional one.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleNoRoute(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of("NOT_FOUND", "There is nothing at that address"));
+    }
+
+    /**
+     * A path or parameter that cannot be read as what the endpoint expects — most often a word where
+     * an id belongs, which is what an old link to a removed page looks like once its path is gone.
+     *
+     * <p>The caller's mistake, so 400 rather than 500, and no stack trace in the log: a crawler
+     * walking stale URLs is not an incident.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleBadPathValue(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of("BAD_REQUEST", "\"%s\" is not a valid %s".formatted(
+                        ex.getValue(), ex.getName())));
     }
 
     /**

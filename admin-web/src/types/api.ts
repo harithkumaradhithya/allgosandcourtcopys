@@ -395,29 +395,14 @@ export type LetterLanguage = 'EN' | 'TA';
 /** A letter still being written, or one its author has finished. */
 export type LetterStatus = 'DRAFT' | 'FINAL';
 
-export interface LetterTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  defaultSubject: string | null;
-  body: string | null;
-  salutation: string | null;
-  language: LetterLanguage;
-  active: boolean;
-  updatedAt: string;
-}
-
 /**
  * A whole letter, which is also what the print view renders.
  *
  * <p>Every block is stored as it was written rather than derived on read: a letter reprinted next
- * year has to come out as it was issued, not restyled because a designation or a template has
- * changed since.
+ * year has to come out as it was issued, not restyled because a designation has changed since.
  */
 export interface Letter {
   id: string;
-  templateId: string | null;
-  templateName: string | null;
   referenceNo: string | null;
   letterDate: string | null;
   language: LetterLanguage;
@@ -441,7 +426,6 @@ export interface LetterSummary {
   referenceNo: string | null;
   letterDate: string | null;
   subject: string;
-  templateName: string | null;
   language: LetterLanguage;
   status: LetterStatus;
   updatedAt: string;

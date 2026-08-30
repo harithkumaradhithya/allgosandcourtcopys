@@ -28,6 +28,4 @@ public interface LetterRepository extends JpaRepository<Letter, UUID> {
      * parameters that returns somebody else's letter.
      */
     Optional<Letter> findByIdAndAuthorId(UUID id, UUID authorId);
-
-    long countByTemplateId(UUID templateId);
 }

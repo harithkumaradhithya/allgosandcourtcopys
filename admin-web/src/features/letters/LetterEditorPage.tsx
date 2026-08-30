@@ -7,13 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { DictationField } from '@/components/ui/DictationField';
 import { TextField } from '@/components/ui/Field';
 import { LetterSheet, type LetterField } from '@/features/letters/LetterSheet';
-import {
-  createLetter,
-  fetchLetter,
-  fetchTemplates,
-  updateLetter,
-  type LetterDraft,
-} from '@/features/letters/api';
+import { createLetter, fetchLetter, updateLetter, type LetterDraft } from '@/features/letters/api';
 import {
   NEW_LETTER,
   clearLocalDraft,
@@ -32,7 +26,6 @@ import { formatTime } from '@/lib/format';
 import type { Letter, LetterLanguage } from '@/types/api';
 
 const EMPTY: LetterDraft = {
-  templateId: null,
   language: 'EN',
   referenceNo: '',
   letterDate: '',
@@ -58,8 +51,8 @@ const EMPTY: LetterDraft = {
  * clicking on the word.
  *
  * <p>Serves both a new letter and an existing one. Which it is depends on the route: `/letters/new`
- * starts from a template and the author's own details, `/letters/:id` loads what was saved — and a
- * saved letter that is still a draft opens here exactly as it was left.
+ * starts from the author's own details, `/letters/:id` loads what was saved — and a saved letter
+ * that is still a draft opens here exactly as it was left.
  *
  * <p><b>Nothing being written here is at the mercy of the network.</b> Every change is kept on this
  * machine within a moment and sent up as a draft shortly after; a server that is down or a
@@ -73,12 +66,11 @@ export function LetterEditorPage() {
   const { user } = useAuth();
 
   const isNew = letterId === undefined;
-  const templateId = searchParams.get('template');
   const requestedLanguage = asLanguage(searchParams.get('lang'));
 
   /**
    * Only what the writer has actually changed; everything else is derived below. Keeping the whole
-   * draft in state would mean copying the template and the saved letter into it, which is the copy
+   * draft in state would mean copying the saved letter into it, which is the copy
    * an effect then has to keep in step.
    */
   const [edited, setEdited] = useState<LetterDraft | null>(null);
@@ -92,25 +84,18 @@ export function LetterEditorPage() {
     enabled: !isNew,
   });
 
-  const templates = useQuery({
-    queryKey: ['letters', 'templates'],
-    queryFn: fetchTemplates,
-    enabled: isNew && templateId !== null,
-  });
-
   /**
-   * Where a letter starts before anybody types: a saved one is itself, and a new one is the chosen
-   * template's wording, the author's own details in the From block, and today's date.
+   * Where a letter starts before anybody types: a saved one is itself, and a new one is the author's
+   * own details in the From block, today's date, and the salutation its language opens with.
    *
-   * <p>Derived rather than copied into state. Copying would need an effect to keep it in step with
-   * two queries that arrive whenever they arrive, and the effect that seeds a form is the one that
+   * <p>Derived rather than copied into state. Copying would need an effect to keep it in step with a
+   * query that arrives whenever it arrives, and the effect that seeds a form is the one that
    * eventually overwrites something somebody typed.
    */
   const seeded: LetterDraft = useMemo(() => {
     const letter = existing.data;
     if (letter) {
       return {
-        templateId: letter.templateId,
         language: letter.language,
         referenceNo: letter.referenceNo ?? '',
         letterDate: letter.letterDate ?? '',
@@ -128,23 +113,17 @@ export function LetterEditorPage() {
 
     if (!isNew || !user) return EMPTY;
 
-    const template = (templates.data ?? []).find((candidate) => candidate.id === templateId);
-    // The template decides the language of a letter written from it; a blank letter is whichever
-    // language was chosen in the chooser.
-    const language = template?.language ?? requestedLanguage ?? 'EN';
+    const language = requestedLanguage ?? 'EN';
 
     return {
       ...EMPTY,
-      templateId: template?.id ?? null,
       language,
       letterDate: todayIso(),
       fromBlock: defaultFromBlock(user),
-      salutation: template?.salutation ?? LETTER_TEXT[language].defaultSalutation,
-      subject: template?.defaultSubject ?? '',
-      body: template?.body ?? '',
+      salutation: LETTER_TEXT[language].defaultSalutation,
       signOff: [user.fullName, user.designation].filter(Boolean).join('\n'),
     };
-  }, [existing.data, isNew, user, templateId, templates.data, requestedLanguage]);
+  }, [existing.data, isNew, user, requestedLanguage]);
 
   /** What the form shows: the writer's edits if there are any, otherwise the seed. */
   const draft = edited ?? seeded;
@@ -179,9 +158,9 @@ export function LetterEditorPage() {
     userId: user?.id ?? null,
     letterId: letterId ?? null,
     draft,
-    // Only once something has actually been changed. Opening a letter, or a template arriving a
-    // moment after the screen did, is not an edit — and a draft saved for either would touch a
-    // letter nobody typed into and fill the drafts list with letters nobody wrote.
+    // Only once something has actually been changed. Opening a letter is not an edit, and a draft
+    // saved for one would touch a letter nobody typed into and fill the drafts list with letters
+    // nobody wrote.
     enabled: ready && edited !== null && recovered === null,
   });
 
@@ -259,8 +238,6 @@ export function LetterEditorPage() {
   /** What the preview and the printer render: the draft as it stands, not the last saved copy. */
   const preview: Letter = {
     id: letterId ?? 'preview',
-    templateId: draft.templateId,
-    templateName: null,
     language: draft.language,
     status: existing.data?.status ?? 'DRAFT',
     referenceNo: draft.referenceNo || null,

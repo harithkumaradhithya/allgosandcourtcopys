@@ -39,7 +39,6 @@ type IconName =
   | 'dashboard'
   | 'inbox'
   | 'members'
-  | 'template'
   | 'reports'
   | 'trash'
   | 'log'
@@ -66,7 +65,6 @@ const ICONS: Record<IconName, string> = {
   inbox: 'M4 13h4l1.5 2.5h5L16 13h4M4 13l2.5-7.5h11L20 13v5.5A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5z',
   members:
     'M9 11.5a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5M2.75 19.5c0-3 2.8-5 6.25-5s6.25 2 6.25 5M16 5.4a3.25 3.25 0 0 1 0 6.2M17.5 14.9c2.2.6 3.75 2.2 3.75 4.6',
-  template: 'M5.5 3.5h9L19 8v12.5H5.5zM14 3.5V8h5M8.5 12.5h7M8.5 16h4.5',
   reports: 'M4 20h16M7.5 20v-7M12 20V6.5M16.5 20v-10',
   trash: 'M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5 7.5 20h9l1-13.5M10.5 10v6M13.5 10v6',
   log: 'M5 4.5h14v15H5zM8.5 9h7M8.5 12.5h7M8.5 16h4',
@@ -165,7 +163,6 @@ const SECTIONS: NavSection[] = [
       { to: '/admin', label: 'Dashboard', icon: 'dashboard', exact: true },
       { to: '/admin/requests', label: 'Registration requests', icon: 'inbox' },
       { to: '/admin/members', label: 'Members', icon: 'members' },
-      { to: '/admin/letter-templates', label: 'Letter templates', icon: 'template' },
       { to: '/admin/reports', label: 'Reports', icon: 'reports' },
       { to: '/admin/deletions', label: 'Deleted documents', icon: 'trash' },
       { to: '/admin/logs', label: 'Activity log', icon: 'log' },

@@ -14,7 +14,6 @@ const AUTHOR = 'user-1';
 const SOMEBODY_ELSE = 'user-2';
 
 const BLANK: LetterDraft = {
-  templateId: null,
   language: 'EN',
   referenceNo: '',
   letterDate: '',

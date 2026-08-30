@@ -17,9 +17,8 @@ import lombok.Setter;
  * One letter, saved so it can be reopened, corrected and reprinted.
  *
  * <p><b>Everything is stored as written.</b> The From block is a copy of the author's details at the
- * time rather than a join to their account, and the wording is a copy of the template's rather than
- * a reference to it. A letter reprinted next year has to come out as it was issued — not restyled
- * because somebody has since changed their designation or edited the template it started from.
+ * time rather than a join to their account. A letter reprinted next year has to come out as it was
+ * issued — not restyled because somebody has since changed their designation.
  */
 @Entity
 @Table(name = "letters")
@@ -31,11 +30,6 @@ public class Letter extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "author_id", nullable = false)
     private User author;
-
-    /** Which template it began as, for reference only; null once that template is deleted. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "template_id")
-    private LetterTemplate template;
 
     /** The office's own file number — "Lr.No.DBC/52/2026-D3". Free text; every office numbers differently. */
     @Column(name = "reference_no")

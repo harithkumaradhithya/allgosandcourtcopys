@@ -13,7 +13,6 @@ import com.allgos.dms.auth.repository.RegistrationRequestRepository;
 import com.allgos.dms.department.entity.Department;
 import com.allgos.dms.department.repository.DepartmentRepository;
 import com.allgos.dms.letter.repository.LetterRepository;
-import com.allgos.dms.letter.repository.LetterTemplateRepository;
 import com.allgos.dms.notification.repository.NotificationRepository;
 import com.allgos.dms.support.AbstractIntegrationTest;
 import com.allgos.dms.user.entity.User;
@@ -33,12 +32,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * Letters and the templates they start from.
+ * Letters.
  *
- * <p>Two rules carry the feature. Templates are the office's standing wording, so only an
- * administrator maintains them while everybody reads them. A letter, by contrast, belongs to the
- * person who wrote it — nobody else can list it, open it, change it or delete it, and that is
- * asserted here rather than assumed from the query being written correctly today.
+ * <p>One rule carries the feature: a letter belongs to the person who wrote it. Nobody else can
+ * list it, open it, change it or delete it, and that is asserted here rather than assumed from the
+ * query being written correctly today.
  */
 class LetterIT extends AbstractIntegrationTest {
 
@@ -52,7 +50,6 @@ class LetterIT extends AbstractIntegrationTest {
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private LetterRepository letterRepository;
-    @Autowired private LetterTemplateRepository templateRepository;
     @Autowired private RegistrationRequestRepository registrationRequestRepository;
     @Autowired private AuditLogRepository auditLogRepository;
     @Autowired private NotificationRepository notificationRepository;
@@ -64,7 +61,6 @@ class LetterIT extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() throws Exception {
         letterRepository.deleteAll();
-        templateRepository.deleteAll();
         // Registering and signing in write audit rows and notify the admins, and both reference the
         // users deleted below — cleared in foreign-key order, as every integration test here does.
         auditLogRepository.deleteAll();
@@ -87,96 +83,19 @@ class LetterIT extends AbstractIntegrationTest {
         otherToken = registerApproveAndSignIn(OTHER_MEMBER_MOBILE, "Arun Kumar", department.getId());
     }
 
-    // ------------------------------------------------------------------------ templates
-
-    @Test
-    @DisplayName("an admin adds a template and everybody can choose it")
-    void adminAddsATemplateEveryoneCanUse() throws Exception {
-        String id = createTemplate("Meeting invitation", "Request to attend the meeting - Reg.");
-
-        // The member sees it in the chooser, with the standing wording ready to edit.
-        mockMvc.perform(get("/api/v1/letters/templates").header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(id))
-                .andExpect(jsonPath("$[0].name").value("Meeting invitation"))
-                .andExpect(jsonPath("$[0].defaultSubject").value("Request to attend the meeting - Reg."))
-                .andExpect(jsonPath("$[0].salutation").value("Sir/Madam,"))
-                .andExpect(jsonPath("$[0].language").value("EN"));
-    }
-
-    @Test
-    @DisplayName("a member cannot add, change or remove a template")
-    void templatesAreTheAdminsToMaintain() throws Exception {
-        String id = createTemplate("Meeting invitation", "Request to attend");
-
-        saveTemplate(memberToken, post("/api/v1/admin/letter-templates"), "Mine", "Subject")
-                .andExpect(status().isForbidden());
-        saveTemplate(memberToken, put("/api/v1/admin/letter-templates/" + id), "Renamed", "Subject")
-                .andExpect(status().isForbidden());
-        mockMvc.perform(delete("/api/v1/admin/letter-templates/{id}", id)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
-                .andExpect(status().isForbidden());
-
-        // Untouched by any of it.
-        assertThat(templateRepository.findAll()).singleElement()
-                .satisfies(template -> assertThat(template.getName()).isEqualTo("Meeting invitation"));
-    }
-
-    @Test
-    @DisplayName("two templates cannot share a name, however it is cased")
-    void namesAreUnique() throws Exception {
-        createTemplate("Meeting invitation", "Subject");
-
-        saveTemplate(adminToken, post("/api/v1/admin/letter-templates"), "MEETING INVITATION", "Subject")
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("TEMPLATE_NAME_TAKEN"));
-    }
-
-    @Test
-    @DisplayName("an unused template is removed; one already written from is retired instead")
-    void deletingATemplateNeverTakesLettersWithIt() throws Exception {
-        String unused = createTemplate("Never used", "Subject");
-        String used = createTemplate("Meeting invitation", "Subject");
-        String letterId = createLetter(memberToken, used, "Purchase Committee meeting");
-
-        mockMvc.perform(delete("/api/v1/admin/letter-templates/{id}", unused)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.removed").value(true));
-
-        mockMvc.perform(delete("/api/v1/admin/letter-templates/{id}", used)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-                .andExpect(status().isOk())
-                // Retired, not removed — and the screen is told which happened.
-                .andExpect(jsonPath("$.removed").value(false));
-
-        // Gone from the chooser...
-        mockMvc.perform(get("/api/v1/letters/templates").header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
-                .andExpect(jsonPath("$.length()").value(0));
-
-        // ...but the letter written from it still opens, and still names it.
-        mockMvc.perform(get("/api/v1/letters/{id}", letterId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.templateName").value("Meeting invitation"));
-    }
-
     // -------------------------------------------------------------------------- letters
 
     @Test
     @DisplayName("a letter is written, listed, reopened whole, corrected and reprinted")
     void theWholeRoundTrip() throws Exception {
-        String templateId = createTemplate("Meeting invitation", "Request to attend the meeting - Reg.");
-        String letterId = createLetter(memberToken, templateId, "Purchase Committee meeting");
+        String letterId = createLetter(memberToken, "Purchase Committee meeting");
 
         // The list carries what a list needs and not the whole body.
         mockMvc.perform(get("/api/v1/letters").header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItems").value(1))
                 .andExpect(jsonPath("$.items[0].subject").value("Purchase Committee meeting"))
-                .andExpect(jsonPath("$.items[0].referenceNo").value("DBC/52/2026-D3"))
-                .andExpect(jsonPath("$.items[0].templateName").value("Meeting invitation"));
+                .andExpect(jsonPath("$.items[0].referenceNo").value("DBC/52/2026-D3"));
 
         // Opening one gives every block the print view needs.
         mockMvc.perform(get("/api/v1/letters/{id}", letterId)
@@ -188,7 +107,7 @@ class LetterIT extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.letterDate").value("2026-08-22"))
                 .andExpect(jsonPath("$.copyTo").value(org.hamcrest.Matchers.containsString("Secretary")));
 
-        Map<String, Object> corrected = letterBody(templateId, "Purchase Committee meeting — revised");
+        Map<String, Object> corrected = letterBody("Purchase Committee meeting — revised");
         corrected.put("body", "The meeting has moved to 4.00 PM.");
         mockMvc.perform(put("/api/v1/letters/{id}", letterId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
@@ -205,8 +124,7 @@ class LetterIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("a letter belongs to whoever wrote it, and nobody else can reach it")
     void lettersAreTheirAuthorsOwn() throws Exception {
-        String templateId = createTemplate("Meeting invitation", "Subject");
-        String letterId = createLetter(memberToken, templateId, "Purchase Committee meeting");
+        String letterId = createLetter(memberToken, "Purchase Committee meeting");
 
         // Not in anybody else's list — not even an administrator's.
         for (String token : new String[] {otherToken, adminToken}) {
@@ -230,7 +148,7 @@ class LetterIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("the author removes their own letter")
     void anAuthorCanRemoveTheirOwn() throws Exception {
-        String letterId = createLetter(memberToken, null, "A letter written from nothing");
+        String letterId = createLetter(memberToken, "A letter written from nothing");
 
         mockMvc.perform(delete("/api/v1/letters/{id}", letterId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
@@ -243,7 +161,7 @@ class LetterIT extends AbstractIntegrationTest {
     @DisplayName("a letter with nobody to send it to, or nothing to say, is refused")
     void theBlocksThatMatterAreRequired() throws Exception {
         for (String missing : new String[] {"toBlock", "subject", "body", "fromBlock"}) {
-            Map<String, Object> body = letterBody(null, "A subject");
+            Map<String, Object> body = letterBody("A subject");
             body.put(missing, "   ");
 
             mockMvc.perform(post("/api/v1/letters")
@@ -262,7 +180,7 @@ class LetterIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("a Tamil letter is saved and reopened as a Tamil letter")
     void theLanguageTravelsWithTheLetter() throws Exception {
-        Map<String, Object> tamil = letterBody(null, "கொள்முதல் குழுக் கூட்டம்");
+        Map<String, Object> tamil = letterBody("கொள்முதல் குழுக் கூட்டம்");
         tamil.put("language", "TA");
         tamil.put("salutation", "ஐயா/அம்மா,");
 
@@ -293,7 +211,7 @@ class LetterIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("a letter that says nothing about its language is English")
     void theLanguageDefaultsRatherThanFailing() throws Exception {
-        String letterId = createLetter(memberToken, null, "A letter from an older client");
+        String letterId = createLetter(memberToken, "A letter from an older client");
 
         mockMvc.perform(get("/api/v1/letters/{id}", letterId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
@@ -352,7 +270,7 @@ class LetterIT extends AbstractIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                letterBody(null, "Purchase Committee meeting"))))
+                                letterBody("Purchase Committee meeting"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("FINAL"));
 
@@ -368,9 +286,9 @@ class LetterIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("an autosave still in flight does not drag a finished letter back into the drafts")
     void autosavingAFinishedLetterKeepsTheEditButNotTheStatus() throws Exception {
-        String letterId = createLetter(memberToken, null, "Purchase Committee meeting");
+        String letterId = createLetter(memberToken, "Purchase Committee meeting");
 
-        Map<String, Object> edit = letterBody(null, "Purchase Committee meeting");
+        Map<String, Object> edit = letterBody("Purchase Committee meeting");
         edit.put("body", "The meeting has moved to 4.00 PM.");
 
         mockMvc.perform(put("/api/v1/letters/drafts/{id}", letterId)
@@ -427,7 +345,7 @@ class LetterIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("a letter that was finished is deleted, not discarded as a draft")
     void discardingRefusesAFinishedLetter() throws Exception {
-        String letterId = createLetter(memberToken, null, "Purchase Committee meeting");
+        String letterId = createLetter(memberToken, "Purchase Committee meeting");
 
         mockMvc.perform(delete("/api/v1/letters/drafts/{id}", letterId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
@@ -437,51 +355,40 @@ class LetterIT extends AbstractIntegrationTest {
         assertThat(letterRepository.count()).isEqualTo(1);
     }
 
+    /*
+     * Templates were removed. Bookmarks and old tabs outlive a feature, so what those requests get
+     * back matters: a plain "there is nothing there", not a 500 that sends somebody looking for a
+     * fault on the server.
+     */
     @Test
-    @DisplayName("signed out, there are no letters and no templates")
+    @DisplayName("the templates that used to be here are gone, and say so plainly")
+    void theTemplateEndpointsAreGone() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/letter-templates")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+        // This one still matches the "open a letter" route, where "templates" is not an id.
+        mockMvc.perform(get("/api/v1/letters/templates")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("signed out, there are no letters")
     void anonymousReachesNothing() throws Exception {
         mockMvc.perform(get("/api/v1/letters")).andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/v1/letters/drafts")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/v1/letters/templates")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/v1/admin/letter-templates")).andExpect(status().isUnauthorized());
     }
 
     // ------------------------------------------------------------------------ helpers
 
-    private String createTemplate(String name, String subject) throws Exception {
-        String body = saveTemplate(adminToken, post("/api/v1/admin/letter-templates"), name, subject)
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return objectMapper.readTree(body).get("id").asText();
-    }
-
-    private ResultActions saveTemplate(
-            String token,
-            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,
-            String name,
-            String subject)
-            throws Exception {
-
-        return mockMvc.perform(request
-                .header(HttpHeaders.AUTHORIZATION, bearer(token))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "name", name,
-                        "description", "For convening a committee",
-                        "defaultSubject", subject,
-                        "salutation", "Sir/Madam,",
-                        "body", "Kind attention is invited to the references cited.",
-                        "language", "EN",
-                        "active", true))));
-    }
-
-    private String createLetter(String token, String templateId, String subject) throws Exception {
+    private String createLetter(String token, String subject) throws Exception {
         String body = mockMvc.perform(post("/api/v1/letters")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(letterBody(templateId, subject))))
+                        .content(objectMapper.writeValueAsString(letterBody(subject))))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -490,9 +397,8 @@ class LetterIT extends AbstractIntegrationTest {
     }
 
     /** A letter shaped like the office's own: the sample in docs is a meeting invitation. */
-    private Map<String, Object> letterBody(String templateId, String subject) {
+    private Map<String, Object> letterBody(String subject) {
         Map<String, Object> body = new HashMap<>();
-        body.put("templateId", templateId);
         body.put("referenceNo", "DBC/52/2026-D3");
         body.put("letterDate", "2026-08-22");
         body.put("fromBlock", "Meena Rajan,\nSection Officer,\nBackward Classes Welfare,\nChepauk, Chennai - 600 005.");

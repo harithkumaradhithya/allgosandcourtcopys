@@ -6,19 +6,14 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import {
-  deleteLetter,
-  discardDraft,
-  fetchMyLetters,
-  fetchTemplates,
-} from '@/features/letters/api';
+import { deleteLetter, discardDraft, fetchMyLetters } from '@/features/letters/api';
 import { forgetDraft } from '@/features/letters/draft-storage';
 import { formatLetterDate } from '@/features/letters/format';
 import { LETTER_LANGUAGES } from '@/features/letters/language';
 import { useAuth } from '@/lib/auth-context';
 import { toApiError } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
-import type { LetterLanguage, LetterSummary, LetterTemplate } from '@/types/api';
+import type { LetterLanguage, LetterSummary } from '@/types/api';
 
 /**
  * The letters this person has written, and the way into a new one.
@@ -36,19 +31,10 @@ export function LettersPage() {
   const { user } = useAuth();
 
   const [choosing, setChoosing] = useState(false);
-  const [language, setLanguage] = useState<LetterLanguage>('EN');
   const [confirming, setConfirming] = useState<LetterSummary | null>(null);
 
   const letters = useQuery({ queryKey: ['letters', 'mine'], queryFn: () => fetchMyLetters('FINAL') });
   const drafts = useQuery({ queryKey: ['letters', 'drafts'], queryFn: () => fetchMyLetters('DRAFT') });
-
-  const templates = useQuery({
-    queryKey: ['letters', 'templates'],
-    queryFn: fetchTemplates,
-    // Only wanted once the chooser is open — a list of templates is not worth fetching to draw a
-    // list of letters.
-    enabled: choosing,
-  });
 
   const remove = useMutation({
     // Throwing away a draft is not the same act as deleting a letter that was issued, and the audit
@@ -69,19 +55,15 @@ export function LettersPage() {
   const unfinished = drafts.data?.items ?? [];
   const error = letters.error ?? remove.error;
 
-  const start = (template: LetterTemplate | null) => {
+  const start = (language: LetterLanguage) => {
     setChoosing(false);
-    const query = template ? `?template=${template.id}` : `?lang=${language}`;
-    navigate(`/letters/new${query}`);
+    navigate(`/letters/new?lang=${language}`);
   };
-
-  /** The templates for the language being written in; the chooser never mixes the two. */
-  const offered = (templates.data ?? []).filter((template) => template.language === language);
 
   return (
     <AppShell
       title="Letters"
-      subtitle="Write from a template in English or Tamil, save it, and print or save as PDF"
+      subtitle="Write in English or Tamil, save it, and print or save as PDF"
       actions={<Button onClick={() => setChoosing(true)}>New letter</Button>}
     >
       {error && <Alert tone="error">{toApiError(error).message}</Alert>}
@@ -143,8 +125,8 @@ export function LettersPage() {
         <section className="rounded-xl border border-line bg-surface p-8 text-center shadow-card">
           <h2 className="font-semibold text-slate-900">No letters yet</h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-            Start from one of the office's templates — the standing wording is filled in, and your
-            own details go into the From block.
+            Your own details go into the From block, and everything else can be typed on the letter
+            itself.
           </p>
           <Button className="mt-5" onClick={() => setChoosing(true)}>
             Write your first letter
@@ -173,7 +155,7 @@ export function LettersPage() {
                   <LanguageTag language={letter.language} /> ·{' '}
                   {letter.referenceNo && <>Lr.No.{letter.referenceNo} · </>}
                   {letter.letterDate && <>{formatLetterDate(letter.letterDate)} · </>}
-                  {letter.templateName ?? 'No template'} · edited {formatDateTime(letter.updatedAt)}
+                  edited {formatDateTime(letter.updatedAt)}
                 </p>
               </div>
 
@@ -195,68 +177,43 @@ export function LettersPage() {
         </ul>
       )}
 
-      <Modal open={choosing} onClose={() => setChoosing(false)} title="Choose a template">
-        {/* Language first, because it decides which templates there are to choose from. An office
-            writing in both keeps two sets of standing wording, and mixing them in one list would
-            mean scrolling past the ones you cannot use. */}
-        <div className="mb-4 flex gap-2" role="group" aria-label="Letter language">
+      {/*
+       * The one thing a letter has to be decided before it is opened. Everything else on it can be
+       * changed on the letter itself, and the language can be too — but a letter has to start in
+       * one of them, and defaulting silently to English on a Tamil Nadu system would be a choice
+       * made on somebody's behalf rather than by them.
+       */}
+      <Modal
+        open={choosing}
+        onClose={() => setChoosing(false)}
+        title="Which language?"
+        description="This decides the headings the letter prints — you can change it while writing."
+      >
+        <div className="space-y-2">
           {LETTER_LANGUAGES.map((option) => (
             <button
               key={option.code}
               type="button"
-              aria-pressed={language === option.code}
-              onClick={() => setLanguage(option.code)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold outline-none
-                transition-[background-color,color] duration-[--duration-quick]
-                focus-visible:ring-2 focus-visible:ring-navy-300 ${
-                  language === option.code
-                    ? 'bg-navy-600 text-white'
-                    : 'bg-surface-sunken text-slate-600 hover:bg-navy-50'
-                }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        {templates.isPending ? (
-          <SkeletonRows count={3} label="Loading templates" />
-        ) : (
-          <div className="space-y-2">
-            {offered.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                onClick={() => start(template)}
-                className="w-full rounded-lg border border-line bg-surface px-4 py-3 text-left
-                  outline-none transition-[border-color,background-color] duration-[--duration-quick]
-                  hover:border-navy-400 hover:bg-navy-50/40 focus-visible:ring-2
-                  focus-visible:ring-navy-300"
-              >
-                <span className="block font-medium text-slate-900">{template.name}</span>
-                {template.description && (
-                  <span className="mt-0.5 block text-sm text-slate-500">{template.description}</span>
-                )}
-              </button>
-            ))}
-
-            {/* Always offered, even with no templates at all — an office that has not set any up
-                yet still needs to be able to write a letter. */}
-            <button
-              type="button"
-              onClick={() => start(null)}
-              className="w-full rounded-lg border border-dashed border-line-strong px-4 py-3
-                text-left outline-none transition-colors duration-[--duration-quick]
+              onClick={() => start(option.code)}
+              className="w-full rounded-lg border border-line bg-surface px-4 py-3 text-left
+                outline-none transition-[border-color,background-color] duration-[--duration-quick]
                 hover:border-navy-400 hover:bg-navy-50/40 focus-visible:ring-2
                 focus-visible:ring-navy-300"
             >
-              <span className="block font-medium text-slate-900">Start from a blank letter</span>
+              <span
+                lang={option.code === 'TA' ? 'ta' : 'en'}
+                className="block font-medium text-slate-900"
+              >
+                {option.label}
+              </span>
               <span className="mt-0.5 block text-sm text-slate-500">
-                The same shape, with nothing filled in but your own details.
+                {option.code === 'TA'
+                  ? 'அனுப்புநர், பெறுநர், பொருள்: — தமிழில் அச்சிடப்படும்'
+                  : 'From, To, Sub: — printed in English'}
               </span>
             </button>
-          </div>
-        )}
+          ))}
+        </div>
       </Modal>
 
       <Modal

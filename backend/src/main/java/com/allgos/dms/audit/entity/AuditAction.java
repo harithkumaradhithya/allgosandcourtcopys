@@ -45,9 +45,6 @@ public final class AuditAction {
     public static final String FILE_PURGED = "file_purged";
 
     // letters
-    public static final String LETTER_TEMPLATE_CREATED = "letter_template_created";
-    public static final String LETTER_TEMPLATE_UPDATED = "letter_template_updated";
-    public static final String LETTER_TEMPLATE_DELETED = "letter_template_deleted";
     public static final String LETTER_CREATED = "letter_created";
     public static final String LETTER_UPDATED = "letter_updated";
     public static final String LETTER_DELETED = "letter_deleted";

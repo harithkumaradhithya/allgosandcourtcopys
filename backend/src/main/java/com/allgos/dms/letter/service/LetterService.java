@@ -10,9 +10,7 @@ import com.allgos.dms.letter.dto.LetterResponses.LetterView;
 import com.allgos.dms.letter.entity.Letter;
 import com.allgos.dms.letter.entity.LetterLanguage;
 import com.allgos.dms.letter.entity.LetterStatus;
-import com.allgos.dms.letter.entity.LetterTemplate;
 import com.allgos.dms.letter.repository.LetterRepository;
-import com.allgos.dms.letter.repository.LetterTemplateRepository;
 import com.allgos.dms.user.entity.User;
 import java.util.Map;
 import java.util.UUID;
@@ -33,15 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class LetterService {
 
     private final LetterRepository letterRepository;
-    private final LetterTemplateRepository templateRepository;
     private final AuditService auditService;
 
-    public LetterService(
-            LetterRepository letterRepository,
-            LetterTemplateRepository templateRepository,
-            AuditService auditService) {
+    public LetterService(LetterRepository letterRepository, AuditService auditService) {
         this.letterRepository = letterRepository;
-        this.templateRepository = templateRepository;
         this.auditService = auditService;
     }
 
@@ -158,7 +151,6 @@ public class LetterService {
     }
 
     private void apply(Letter letter, LetterRequests.SaveLetter request) {
-        letter.setTemplate(template(request.templateId()));
         letter.setStatus(LetterStatus.FINAL);
         letter.setLanguage(language(request.language()));
         letter.setReferenceNo(trimToNull(request.referenceNo()));
@@ -182,7 +174,6 @@ public class LetterService {
      * same statement as the column being absent.
      */
     private void applyDraft(Letter letter, LetterRequests.SaveDraft request) {
-        letter.setTemplate(template(request.templateId()));
         letter.setStatus(LetterStatus.DRAFT);
         letter.setLanguage(language(request.language()));
         letter.setReferenceNo(trimToNull(request.referenceNo()));
@@ -196,15 +187,6 @@ public class LetterService {
         letter.setEnclosure(trimToNull(request.enclosure()));
         letter.setCopyTo(trimToNull(request.copyTo()));
         letter.setSignOff(trimToNull(request.signOff()));
-    }
-
-    private LetterTemplate template(UUID templateId) {
-        return templateId == null
-                ? null
-                : templateRepository
-                        .findById(templateId)
-                        .orElseThrow(() -> ApiException.badRequest(
-                                "TEMPLATE_INVALID", "That template no longer exists"));
     }
 
     /** English unless the caller says otherwise, which is what an older client sending nothing means. */

@@ -5,12 +5,9 @@ import com.allgos.dms.common.security.AuthenticatedUser;
 import com.allgos.dms.letter.dto.LetterRequests;
 import com.allgos.dms.letter.dto.LetterResponses.LetterSummary;
 import com.allgos.dms.letter.dto.LetterResponses.LetterView;
-import com.allgos.dms.letter.dto.LetterResponses.TemplateView;
 import com.allgos.dms.letter.entity.LetterStatus;
 import com.allgos.dms.letter.service.LetterService;
-import com.allgos.dms.letter.service.LetterTemplateService;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -27,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Writing letters: the templates to start from, and the letters themselves.
+ * Writing letters.
  *
  * <p>Every method is scoped to the caller by the service, which queries by author id. There is no
  * endpoint that lists or opens somebody else's letter.
@@ -39,17 +36,9 @@ public class LetterController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final LetterService letterService;
-    private final LetterTemplateService templateService;
 
-    public LetterController(LetterService letterService, LetterTemplateService templateService) {
+    public LetterController(LetterService letterService) {
         this.letterService = letterService;
-        this.templateService = templateService;
-    }
-
-    /** The templates on offer. Retired ones are not among them. */
-    @GetMapping("/templates")
-    public List<TemplateView> templates() {
-        return templateService.listActive();
     }
 
     /**

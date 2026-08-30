@@ -4,39 +4,9 @@ import com.allgos.dms.letter.entity.LetterLanguage;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
-import java.util.UUID;
 
-/** Request bodies for templates and letters. */
+/** Request bodies for letters. */
 public final class LetterRequests {
-
-    /**
-     * A template, as an administrator maintains it.
-     *
-     * <p>Only the name is required. A template that is nothing but a name is a blank letter with a
-     * label, which is a perfectly reasonable thing for an office to want.
-     */
-    public record SaveTemplate(
-            @NotBlank(message = "Give the template a name")
-            @Size(max = 160)
-            String name,
-
-            @Size(max = 500)
-            String description,
-
-            @Size(max = 500)
-            String defaultSubject,
-
-            @Size(max = 20_000, message = "That is longer than a letter template needs to be")
-            String body,
-
-            @Size(max = 120)
-            String salutation,
-
-            /** Which language's chooser it belongs to; English when the caller says nothing. */
-            LetterLanguage language,
-
-            /** Retired templates stay readable on the letters already written from them. */
-            boolean active) {}
 
     /**
      * A letter, as its author writes it.
@@ -46,9 +16,6 @@ public final class LetterRequests {
      * save would quietly discard their edit.
      */
     public record SaveLetter(
-            /** Which template it started from; may be null for a letter written from nothing. */
-            UUID templateId,
-
             @Size(max = 120)
             String referenceNo,
 
@@ -101,7 +68,6 @@ public final class LetterRequests {
      * requirement moving out of the DTO and into a branch somebody has to remember to write.
      */
     public record SaveDraft(
-            UUID templateId,
             @Size(max = 120) String referenceNo,
             LocalDate letterDate,
             LetterLanguage language,

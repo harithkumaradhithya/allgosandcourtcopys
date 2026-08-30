@@ -3,39 +3,12 @@ package com.allgos.dms.letter.dto;
 import com.allgos.dms.letter.entity.Letter;
 import com.allgos.dms.letter.entity.LetterLanguage;
 import com.allgos.dms.letter.entity.LetterStatus;
-import com.allgos.dms.letter.entity.LetterTemplate;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/** Response bodies for templates and letters. */
+/** Response bodies for letters. */
 public final class LetterResponses {
-
-    /** A template as the chooser and the admin list see it. */
-    public record TemplateView(
-            UUID id,
-            String name,
-            String description,
-            String defaultSubject,
-            String body,
-            String salutation,
-            LetterLanguage language,
-            boolean active,
-            Instant updatedAt) {
-
-        public static TemplateView from(LetterTemplate template) {
-            return new TemplateView(
-                    template.getId(),
-                    template.getName(),
-                    template.getDescription(),
-                    template.getDefaultSubject(),
-                    template.getBody(),
-                    template.getSalutation(),
-                    template.getLanguage(),
-                    template.isActive(),
-                    template.getUpdatedAt());
-        }
-    }
 
     /**
      * A whole letter, which is also what the print view renders.
@@ -45,8 +18,6 @@ public final class LetterResponses {
      */
     public record LetterView(
             UUID id,
-            UUID templateId,
-            String templateName,
             String referenceNo,
             LocalDate letterDate,
             LetterLanguage language,
@@ -66,8 +37,6 @@ public final class LetterResponses {
         public static LetterView from(Letter letter) {
             return new LetterView(
                     letter.getId(),
-                    letter.getTemplate() == null ? null : letter.getTemplate().getId(),
-                    letter.getTemplate() == null ? null : letter.getTemplate().getName(),
                     letter.getReferenceNo(),
                     letter.getLetterDate(),
                     letter.getLanguage(),
@@ -97,7 +66,6 @@ public final class LetterResponses {
             String referenceNo,
             LocalDate letterDate,
             String subject,
-            String templateName,
             LetterLanguage language,
             LetterStatus status,
             Instant updatedAt) {
@@ -108,7 +76,6 @@ public final class LetterResponses {
                     letter.getReferenceNo(),
                     letter.getLetterDate(),
                     letter.getSubject(),
-                    letter.getTemplate() == null ? null : letter.getTemplate().getName(),
                     letter.getLanguage(),
                     letter.getStatus(),
                     letter.getUpdatedAt());
