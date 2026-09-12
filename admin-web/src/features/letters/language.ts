@@ -25,12 +25,13 @@ export const LETTER_LANGUAGES = [
   { code: 'TA', label: 'தமிழ்', short: 'தமிழ்' },
 ] as const satisfies ReadonlyArray<{ code: LetterLanguage; label: string; short: string }>;
 
-/** The four shapes a letter can be written in — chosen once, changeable while writing. */
+/** The five shapes a letter can be written in — chosen once, changeable while writing. */
 export const LETTER_FORMATS = [
   { code: 'LETTER', label: 'Letter', short: 'Letter' },
   { code: 'MEMO', label: 'Memo', short: 'Memo' },
   { code: 'GO', label: 'Government Order', short: 'G.O.' },
   { code: 'DO', label: 'D.O. Letter', short: 'D.O.' },
+  { code: 'OFFICE_NOTE', label: 'Office Note', short: 'Note' },
 ] as const satisfies ReadonlyArray<{ code: LetterFormat; label: string; short: string }>;
 
 /**
@@ -726,4 +727,125 @@ export const DO_TEXT: Record<LetterLanguage, DoText> = {
 /** The language of a D.O. letter, with English standing in for anything a server has not said. */
 export function doText(language: LetterLanguage | null | undefined): DoText {
   return DO_TEXT[language ?? 'EN'] ?? DO_TEXT.EN;
+}
+
+/**
+ * The headings and fixed phrases an Office Note prints — internal file noting rather than
+ * correspondence. There is no sender or recipient: it is headed by a file number (top right) and a
+ * centred title, opens the body with a fixed submission phrase nobody types
+ * ({@link OfficeNoteSheetLabels.submissionPhrase}), and closes with two fixed blocks — for orders,
+ * and put up for approval — each followed by blank space for a handwritten initial and date rather
+ * than anything typed here.
+ */
+export interface OfficeNoteSheetLabels {
+  /** The centred, underlined title at the top — "அலுவலகக் குறிப்பு" / "OFFICE NOTE". */
+  title: string;
+  subject: string;
+  reference: string;
+  /** Printed above the body, in bold italics — never typed. */
+  submissionPhrase: string;
+  /** The first of the two fixed closing blocks — "அ- ஆணைக்காக" / "A - For orders". */
+  forOrders: string;
+  /** The second — "ப.அ" / "Put up for approval". */
+  putUpForApproval: string;
+  /** The fixed sentence under {@link putUpForApproval}. */
+  draftForApproval: string;
+  /** Under each blank signature space — "(சுருக்கொப்பம் தேதியுடன்)" / "(Initials with date)". */
+  signatureCaption: string;
+}
+
+export interface OfficeNoteFormLabels {
+  headingSection: string;
+  bodySection: string;
+
+  referenceNo: string;
+  referenceNoHint: string;
+  subject: string;
+  subjectHint: string;
+  reference: string;
+  referenceHint: string;
+  body: string;
+  bodyHint: string;
+}
+
+interface OfficeNoteText {
+  sheet: OfficeNoteSheetLabels;
+  form: OfficeNoteFormLabels;
+  placeholders: Record<'referenceNo' | 'subject' | 'reference' | 'body', string>;
+}
+
+export const OFFICE_NOTE_TEXT: Record<LetterLanguage, OfficeNoteText> = {
+  EN: {
+    sheet: {
+      title: 'OFFICE NOTE',
+      subject: 'Subject:-',
+      reference: 'Reference:-',
+      submissionPhrase: 'Submitted respectfully.',
+      forOrders: 'A - For orders',
+      putUpForApproval: 'Put up for approval',
+      draftForApproval: 'Draft proceedings submitted for approval.',
+      signatureCaption: '(Initials with date)',
+    },
+    form: {
+      headingSection: 'Heading',
+      bodySection: 'The note',
+
+      referenceNo: 'File number',
+      referenceNoHint: 'Printed at the top right, above the title',
+      subject: 'Subject',
+      subjectHint:
+        'Topic — action requested — the individual’s name and designation — effective date — "regarding"',
+      reference: 'Reference',
+      referenceHint:
+        "Numbered: the parent G.O.s first, then this office's earlier disposal, then the individual's application with its date",
+      body: 'Body',
+      bodyHint:
+        'Numbered paragraphs: (1) the request and application number (2) earlier sanctions on record (3) present balance and eligibility (4) the recommendation for orders',
+    },
+    placeholders: {
+      referenceNo: 'File number and year',
+      subject: 'What the note is about',
+      reference: 'The orders and papers this note relies on',
+      body: 'Write the note here, as numbered paragraphs',
+    },
+  },
+
+  TA: {
+    sheet: {
+      title: 'அலுவலகக் குறிப்பு',
+      subject: 'பொருள்:-',
+      reference: 'பார்வை:-',
+      submissionPhrase: 'பணிந்து அனுப்பப்படுகிறது.',
+      forOrders: 'அ- ஆணைக்காக',
+      putUpForApproval: 'ப.அ',
+      draftForApproval: 'வரைவு செயல்முறை ஆணை ஏற்புக்கு சமர்ப்பிக்கப்பட்டுள்ளது.',
+      signatureCaption: '(சுருக்கொப்பம் தேதியுடன்)',
+    },
+    form: {
+      headingSection: 'தலைப்பு',
+      bodySection: 'குறிப்பு',
+
+      referenceNo: 'கோப்பு எண்',
+      referenceNoHint: 'தலைப்புக்கு மேல், வலப்புறம் அச்சிடப்படும்',
+      subject: 'பொருள்',
+      subjectHint: 'பொருள் - கோரப்படும் நடவடிக்கை - தனியரின் பெயர் மற்றும் பதவி - நடைமுறை நாள் - "தொடர்பாக"',
+      reference: 'பார்வை',
+      referenceHint:
+        'எண்ணிடப்பட்டது: முதலில் அரசாணைகள், பின் இவ்வலுவலக முந்தைய முடிவுக்கோப்பு, இறுதியாக தனியரின் விண்ணப்பம் நாளுடன்',
+      body: 'குறிப்பு உரை',
+      bodyHint:
+        'எண்ணிடப்பட்ட பத்திகள்: (1) கோரிக்கை மற்றும் விண்ணப்ப எண் (2) பதிவிலுள்ள முந்தைய ஒப்புதல்கள் (3) தற்போதைய இருப்பு மற்றும் தகுதி (4) ஆணைக்கான பரிந்துரை',
+    },
+    placeholders: {
+      referenceNo: 'கோப்பு எண் மற்றும் ஆண்டு',
+      subject: 'குறிப்பின் பொருள்',
+      reference: 'இக்குறிப்பு சார்ந்திருக்கும் ஆணைகள் மற்றும் ஆவணங்கள்',
+      body: 'குறிப்பை இங்கே எழுதுங்கள் — எண்ணிடப்பட்ட பத்திகளாக',
+    },
+  },
+};
+
+/** The language of an Office Note, with English standing in for anything a server has not said. */
+export function officeNoteText(language: LetterLanguage | null | undefined): OfficeNoteText {
+  return OFFICE_NOTE_TEXT[language ?? 'EN'] ?? OFFICE_NOTE_TEXT.EN;
 }

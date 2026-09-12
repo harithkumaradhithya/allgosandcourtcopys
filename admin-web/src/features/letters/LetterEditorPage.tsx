@@ -6,7 +6,13 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { DictationField } from '@/components/ui/DictationField';
 import { TextField } from '@/components/ui/Field';
-import { LetterSheet, type LetterField } from '@/features/letters/LetterSheet';
+import { Modal } from '@/components/ui/Modal';
+import {
+  LetterSheet,
+  parseTables,
+  type LetterField,
+  type TableState,
+} from '@/features/letters/LetterSheet';
 import { createLetter, fetchLetter, updateLetter, type LetterDraft } from '@/features/letters/api';
 import {
   NEW_LETTER,
@@ -29,6 +35,7 @@ import {
   goText,
   letterText,
   memoText,
+  officeNoteText,
   type DoHierarchy,
 } from '@/features/letters/language';
 import { useLetterAutosave, type AutosaveState } from '@/features/letters/useAutosave';
@@ -37,6 +44,10 @@ import { useDictationLanguage } from '@/lib/dictation';
 import { toApiError } from '@/lib/errors';
 import { formatTime } from '@/lib/format';
 import type { Letter, LetterFormat, LetterGoType, LetterLanguage } from '@/types/api';
+
+/** An Office Note has no recipient of its own; this fills the column behind "To" without ever being
+ *  shown, so the field it satisfies is never mistaken for content somebody actually wrote. */
+const OFFICE_NOTE_PLACEHOLDER = '—';
 
 const EMPTY: LetterDraft = {
   language: 'EN',
@@ -149,11 +160,15 @@ export function LetterEditorPage() {
       // A D.O.'s office block is a shorter version of the same address the From block is seeded
       // from — just what identifies the office, not the writer's own name and post again.
       officeBlock: format === 'DO' ? (user.officeAddress ?? '') : '',
-      // A memo or a G.O. has no salutation — both are written about the recipient, not to them. A
-      // D.O.'s salutation depends on who it is going to, which nothing here knows yet — the
-      // hierarchy picker in its own form section fills this in once the writer says.
+      // An Office Note is not addressed to anyone — it has no recipient at all — but the column
+      // behind "To" still requires something, so a placeholder fills it rather than asking the
+      // writer to type into a field the sheet never shows or prints.
+      toBlock: format === 'OFFICE_NOTE' ? OFFICE_NOTE_PLACEHOLDER : '',
+      // A memo, a G.O. and an Office Note carry no salutation — none of them are addressed to
+      // anyone. A D.O.'s salutation depends on who it is going to, which nothing here knows yet —
+      // the hierarchy picker in its own form section fills this in once the writer says.
       salutation:
-        format === 'MEMO' || format === 'GO' || format === 'DO'
+        format === 'MEMO' || format === 'GO' || format === 'DO' || format === 'OFFICE_NOTE'
           ? ''
           : LETTER_TEXT[language].defaultSalutation,
       signOff: [user.fullName, user.designation].filter(Boolean).join('\n'),
@@ -165,11 +180,13 @@ export function LetterEditorPage() {
   const isMemo = draft.format === 'MEMO';
   const isGo = draft.format === 'GO';
   const isDo = draft.format === 'DO';
+  const isOfficeNote = draft.format === 'OFFICE_NOTE';
   const text = letterText(draft.language);
   const labels = text.form;
   const memo = memoText(draft.language);
   const go = goText(draft.language);
   const doLetter = doText(draft.language);
+  const officeNote = officeNoteText(draft.language);
 
   const ready = isNew ? user !== null : existing.isSuccess;
 
@@ -258,8 +275,11 @@ export function LetterEditorPage() {
     setEdited((current) => {
       const from = current ?? seeded;
 
-      // A memo or a G.O. carries no salutation to begin with, so there is nothing here to follow it.
-      if (from.format === 'MEMO' || from.format === 'GO') return { ...from, language };
+      // A memo, a G.O. and an Office Note carry no salutation to begin with, so there is nothing
+      // here to follow it.
+      if (from.format === 'MEMO' || from.format === 'GO' || from.format === 'OFFICE_NOTE') {
+        return { ...from, language };
+      }
 
       // A D.O.'s salutation follows its own stock phrases (by hierarchy), not a letter's single
       // default — the same idea as below, applied to the four the hierarchy picker offers.
@@ -298,12 +318,21 @@ export function LetterEditorPage() {
    * forth loses nothing but a salutation neither a memo nor a G.O. prints in the first place. A G.O.
    * type is seeded to Ms the first time a letter becomes one, so the picker never opens on nothing
    * selected, but a type chosen earlier is remembered if the writer switches away and back.
+   *
+   * <p>An Office Note is the one exception, since it has no recipient at all: switching into it fills
+   * "To" with a placeholder only when nothing real is there already, so the column stays non-blank
+   * without a recipient somebody actually typed ever being thrown away underneath it.
    */
   const switchFormat = (format: LetterFormat) => {
     if (format === draft.format) return;
     setEdited((current) => {
       const from = current ?? seeded;
-      return { ...from, format, goType: format === 'GO' ? (from.goType ?? 'MS') : from.goType };
+      return {
+        ...from,
+        format,
+        goType: format === 'GO' ? (from.goType ?? 'MS') : from.goType,
+        toBlock: format === 'OFFICE_NOTE' ? from.toBlock.trim() || OFFICE_NOTE_PLACEHOLDER : from.toBlock,
+      };
     });
     setSaved(false);
   };
@@ -319,14 +348,40 @@ export function LetterEditorPage() {
     set('salutation')(DO_SALUTATIONS[draft.language][hierarchy]);
   };
 
-  const hasTable = draft.tableData.trim().length > 0;
+  /** Asks how big a table should be rather than guessing — the writer knows the shape they need. */
+  const [tableDialogOpen, setTableDialogOpen] = useState(false);
+  const [rowsToInsert, setRowsToInsert] = useState('2');
+  const [columnsToInsert, setColumnsToInsert] = useState('2');
 
-  /** A table starts as two rows of two blank cells — small enough to see the shape, not a page of them. */
-  const toggleTable = () => {
-    set('tableData')(hasTable ? '' : JSON.stringify([['', ''], ['', '']]));
+  const openTableDialog = () => setTableDialogOpen(true);
+
+  /** A letter can carry any number of tables, each independent — this adds one more rather than
+   *  replacing whatever is already there. Drops it near the top of the sheet, offset a little
+   *  further down each time so several tables added one after another start out visibly apart
+   *  rather than stacked exactly on top of each other — the writer drags each to where it belongs
+   *  from there. */
+  const insertTable = () => {
+    const rows = clampTableSize(rowsToInsert);
+    const columns = clampTableSize(columnsToInsert);
+    const existing = parseTables(draft.tableData);
+    const table: TableState = {
+      id: crypto.randomUUID(),
+      rows: Array.from({ length: rows }, () => Array.from({ length: columns }, () => '')),
+      widthPercent: 100,
+      heightPercent: 100,
+      xPercent: 0,
+      yPx: 24 + existing.length * 32,
+    };
+    set('tableData')(JSON.stringify([...existing, table]));
+    setTableDialogOpen(false);
   };
 
-  const editTable = (rows: string[][]) => set('tableData')(JSON.stringify(rows));
+  /** Edits one table by id, among however many the letter carries — `next: null` removes it. */
+  const editTable = (id: string, next: TableState | null) => {
+    const tables = parseTables(draft.tableData);
+    const updated = next ? tables.map((table) => (table.id === id ? next : table)) : tables.filter((table) => table.id !== id);
+    set('tableData')(JSON.stringify(updated));
+  };
 
   const complete =
     draft.fromBlock.trim() && draft.toBlock.trim() && draft.subject.trim() && draft.body.trim();
@@ -368,8 +423,11 @@ export function LetterEditorPage() {
           <Button variant="secondary" onClick={() => navigate('/letters')}>
             Back
           </Button>
-          <Button variant="secondary" onClick={toggleTable}>
-            {hasTable ? 'Remove table' : '+ Add table'}
+          {/* Always available, never a toggle: a letter can carry more than one table, so adding
+              another is never "the" table-adding action being undone. Removing one happens at the
+              table itself, since with several on the letter there is no single table left to remove. */}
+          <Button variant="secondary" onClick={openTableDialog}>
+            + Add table
           </Button>
           {/* Printing is the browser's own dialogue, which is also where Save as PDF lives. Nothing
               is generated on the server, so what prints is exactly what is on screen. */}
@@ -428,7 +486,7 @@ export function LetterEditorPage() {
               A letter is addressed with a salutation. A memo is shorter, has none, and is written in
               the third person.
             </p>
-            <div className="mt-3 flex gap-2" role="group" aria-label="Letter format">
+            <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Letter format">
               {LETTER_FORMATS.map((option) => (
                 <button
                   key={option.code}
@@ -770,6 +828,48 @@ export function LetterEditorPage() {
                 </div>
               </div>
             </>
+          ) : isOfficeNote ? (
+            <>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{officeNote.form.headingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <TextField
+                    label={officeNote.form.referenceNo}
+                    value={draft.referenceNo}
+                    onChange={(event) => set('referenceNo')(event.target.value)}
+                    placeholder="அ-1 / 8848 / 2026"
+                    hint={officeNote.form.referenceNoHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{officeNote.form.bodySection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={officeNote.form.subject}
+                    rows={3}
+                    value={draft.subject}
+                    onValueChange={set('subject')}
+                    hint={officeNote.form.subjectHint}
+                  />
+                  <DictationField
+                    label={officeNote.form.reference}
+                    rows={4}
+                    value={draft.reference}
+                    onValueChange={set('reference')}
+                    hint={officeNote.form.referenceHint}
+                  />
+                  <DictationField
+                    label={officeNote.form.body}
+                    rows={12}
+                    value={draft.body}
+                    onValueChange={set('body')}
+                    hint={officeNote.form.bodyHint}
+                  />
+                </div>
+              </div>
+            </>
           ) : (
             <>
               <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
@@ -876,8 +976,47 @@ export function LetterEditorPage() {
           <LetterSheet letter={preview} onEdit={editInSheet} onTableChange={editTable} />
         </section>
       </div>
+
+      <Modal
+        open={tableDialogOpen}
+        onClose={() => setTableDialogOpen(false)}
+        title="Add a table"
+        description="How many rows and columns does it need? It drops onto the letter and can be dragged anywhere on it afterwards — more rows or columns can be added later from the table itself."
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <TextField
+            label="Rows"
+            type="number"
+            min={1}
+            max={20}
+            value={rowsToInsert}
+            onChange={(event) => setRowsToInsert(event.target.value)}
+          />
+          <TextField
+            label="Columns"
+            type="number"
+            min={1}
+            max={20}
+            value={columnsToInsert}
+            onChange={(event) => setColumnsToInsert(event.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={() => setTableDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={insertTable}>Insert table</Button>
+        </div>
+      </Modal>
     </AppShell>
   );
+}
+
+/** A row or column count typed into the dialog, kept sane whatever was typed — never zero, never a page. */
+function clampTableSize(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(20, Math.max(1, parsed));
 }
 
 /**
@@ -922,5 +1061,7 @@ function asLanguage(value: string | null): LetterLanguage | null {
 
 /** A `?format=` that is not one of the four is simply not an answer, and the seed decides instead. */
 function asFormat(value: string | null): LetterFormat | null {
-  return value === 'LETTER' || value === 'MEMO' || value === 'GO' || value === 'DO' ? value : null;
+  return value === 'LETTER' || value === 'MEMO' || value === 'GO' || value === 'DO' || value === 'OFFICE_NOTE'
+    ? value
+    : null;
 }

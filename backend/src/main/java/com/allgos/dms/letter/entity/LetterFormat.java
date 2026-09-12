@@ -10,7 +10,10 @@ package com.allgos.dms.letter.entity;
  * Government Order — issued only by the Secretariat, with an abstract, a "படிக்கப்பட்டவை" (Read)
  * clause instead of a reference line, and an order body signed "by order of the Governor". A
  * {@code DO} ("நேர்முகக் கடிதம்" / Demi-Official letter) is personal-cum-official correspondence
- * between officers, written in the first person and signed "Yours sincerely" rather than issued.
+ * between officers, written in the first person and signed "Yours sincerely" rather than issued. An
+ * {@code OFFICE_NOTE} ("அலுவலகக் குறிப்பு") is not correspondence at all but internal file noting —
+ * no sender or recipient, headed by a file number and a centred title, with a fixed submission
+ * phrase before the body and fixed "for orders" / "put up for approval" blocks after it.
  * Stored with the letter for the same reason the language is: reprinting it next year has to come
  * out in the shape it was issued.
  */
@@ -18,5 +21,6 @@ public enum LetterFormat {
     LETTER,
     MEMO,
     GO,
-    DO
+    DO,
+    OFFICE_NOTE
 }

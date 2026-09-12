@@ -400,9 +400,12 @@ export type LetterLanguage = 'EN' | 'TA';
  * Secretariat, with an abstract, a "படிக்கப்பட்டவை" (Read) clause and an order signed by order of the
  * Governor. `DO` ("நேர்முகக் கடிதம்") is a Demi-Official letter — personal-cum-official correspondence
  * between officers, written in the first person and signed "Yours sincerely" rather than issued.
+ * `OFFICE_NOTE` ("அலுவலகக் குறிப்பு") is not correspondence at all but internal file noting — no
+ * sender or recipient, headed by a file number and a centred title, with a fixed submission phrase
+ * before the body and fixed "for orders" / "put up for approval" blocks after it.
  * Stored with the letter for the same reason the language is.
  */
-export type LetterFormat = 'LETTER' | 'MEMO' | 'GO' | 'DO';
+export type LetterFormat = 'LETTER' | 'MEMO' | 'GO' | 'DO' | 'OFFICE_NOTE';
 
 /**
  * The classification a Government Order is issued under, printed in brackets before its number —

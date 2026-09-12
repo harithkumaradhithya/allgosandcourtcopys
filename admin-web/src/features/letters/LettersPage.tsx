@@ -222,7 +222,9 @@ export function LettersPage() {
                     ? 'அரசாணை — issued by the Secretariat, with an abstract, read references and an order'
                     : option.code === 'DO'
                       ? 'நேர்முகக் கடிதம் — personal-cum-official, written in the first person, officer to officer'
-                      : 'Addressed with a salutation, to one or more recipients'}
+                      : option.code === 'OFFICE_NOTE'
+                        ? 'அலுவலகக் குறிப்பு — internal file noting, no sender or recipient, put up for orders'
+                        : 'Addressed with a salutation, to one or more recipients'}
               </span>
             </button>
           ))}
@@ -297,6 +299,7 @@ function LanguageTag({ language }: { language: LetterLanguage }) {
 /** Which shape a letter is in — left off the line entirely for the common case, a plain letter. */
 function FormatTag({ format }: { format: LetterFormat }) {
   if (format === 'LETTER') return null;
-  const label = format === 'MEMO' ? 'Memo' : format === 'GO' ? 'G.O.' : 'D.O.';
+  const label =
+    format === 'MEMO' ? 'Memo' : format === 'GO' ? 'G.O.' : format === 'DO' ? 'D.O.' : 'Note';
   return <>{label} · </>;
 }
