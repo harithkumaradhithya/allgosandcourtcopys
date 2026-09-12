@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { AdSlot } from '@/features/ads/AdSlot';
 import { DepartmentAvatar } from '@/components/ui/DepartmentAvatar';
 import { Alert } from '@/components/ui/Alert';
 import { SkeletonCards } from '@/components/ui/Skeleton';
@@ -110,6 +111,11 @@ export function DepartmentsPage() {
           );
         })}
       </div>
+
+      {/* Below the grid rather than above it. A strip between the page title and the departments
+          would push the thing everybody came for down the screen, which is exactly the move that
+          makes people resent adverts. Renders nothing when none is running. */}
+      <AdSlot placement="DEPARTMENTS" className="mt-6" />
     </AppShell>
   );
 }

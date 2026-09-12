@@ -61,6 +61,16 @@ public class StorageService {
         return "%s/%s/%s%s".formatted(departmentId, folderId, UUID.randomUUID(), extensionOf(originalFilename));
     }
 
+    /**
+     * The same, for objects that hang from nothing in the department tree — an advert's media, which
+     * belongs to the whole site rather than to a folder in it.
+     *
+     * @param prefix the top-level folder in the bucket, e.g. {@code "ads"}
+     */
+    public String newKey(String prefix, String originalFilename) {
+        return "%s/%s%s".formatted(prefix, UUID.randomUUID(), extensionOf(originalFilename));
+    }
+
     public void put(String key, InputStream content, String contentType, long sizeBytes) {
         try {
             PutObjectRequest request = PutObjectRequest.builder()

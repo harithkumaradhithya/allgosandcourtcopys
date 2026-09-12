@@ -44,6 +44,11 @@ public final class AuditAction {
     /** Hard-deleted for good — by an admin, or by the 30-day sweep once nobody restored it. */
     public static final String FILE_PURGED = "file_purged";
 
+    // adverts
+    public static final String AD_CREATED = "ad_created";
+    public static final String AD_UPDATED = "ad_updated";
+    public static final String AD_DELETED = "ad_deleted";
+
     // letters
     public static final String LETTER_CREATED = "letter_created";
     public static final String LETTER_UPDATED = "letter_updated";

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { AdSlot } from '@/features/ads/AdSlot';
 import { fetchUnreadCount } from '@/features/notifications/api';
 import { useAuth } from '@/lib/auth-context';
 
@@ -42,6 +43,7 @@ type IconName =
   | 'reports'
   | 'trash'
   | 'log'
+  | 'megaphone'
   | 'user';
 
 /**
@@ -68,6 +70,8 @@ const ICONS: Record<IconName, string> = {
   reports: 'M4 20h16M7.5 20v-7M12 20V6.5M16.5 20v-10',
   trash: 'M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5 7.5 20h9l1-13.5M10.5 10v6M13.5 10v6',
   log: 'M5 4.5h14v15H5zM8.5 9h7M8.5 12.5h7M8.5 16h4',
+  megaphone:
+    'M3.5 10.5v3a1.5 1.5 0 0 0 1.5 1.5h2.5l7 4.5V4.5l-7 4.5H5a1.5 1.5 0 0 0-1.5 1.5M7.5 15v4.5h3V16.9M18 9.5a3.5 3.5 0 0 1 0 5',
   user: 'M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M5 20c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5',
 };
 
@@ -166,6 +170,7 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/reports', label: 'Reports', icon: 'reports' },
       { to: '/admin/deletions', label: 'Deleted documents', icon: 'trash' },
       { to: '/admin/logs', label: 'Activity log', icon: 'log' },
+      { to: '/admin/ads', label: 'Adverts', icon: 'megaphone' },
     ],
   },
 ];
@@ -461,6 +466,16 @@ export function Sidebar({
               </ul>
             </div>
           ))}
+
+          {/*
+            The rail's advert, last of everything and inside the scrolling area — so however tall it
+            is, it can never push a navigation entry off the screen.
+
+            Hidden on a desktop once the rail folds: 4.75rem of icons has no room for one, and a
+            banner squeezed into it would be unreadable as well as unwelcome. It stays in the phone
+            drawer, which is full width whatever the desktop rail is doing.
+          */}
+          <AdSlot placement="SIDEBAR" className={`mt-4 ${collapsed ? 'lg:hidden' : ''}`} />
         </nav>
 
         {/*

@@ -455,3 +455,67 @@ export interface LetterSummary {
   status: LetterStatus;
   updatedAt: string;
 }
+
+/* ------------------------------------------------------------------------- adverts */
+
+/**
+ * Where an advert runs.
+ *
+ * <p>A closed list on the server too, and a short one on purpose: every value is a region somebody
+ * is *between* tasks when they look at. There is no value for the letter editor, the document
+ * preview or any authentication screen, so no amount of configuration can put an advert in front of
+ * somebody who is working.
+ */
+export type AdPlacement = 'HOME' | 'DEPARTMENTS' | 'SIDEBAR';
+
+/**
+ * What the uploaded bytes turned out to be — detected server-side, never chosen.
+ *
+ * <p>`GIF` is an image to the markup and its own kind here because it moves on its own and cannot
+ * be paused, which is what the reduced-motion rules need to know.
+ */
+export type AdMediaKind = 'IMAGE' | 'GIF' | 'VIDEO';
+
+/**
+ * An advert as a reader receives it.
+ *
+ * <p>The popup copy travels with the card rather than being fetched on click, so opening it is
+ * instant and costs no request.
+ */
+export interface Ad {
+  id: string;
+  placement: AdPlacement;
+  mediaKind: AdMediaKind;
+  /** Short-lived and presigned; the bucket is never public. Expires, so the query refetches. */
+  mediaUrl: string;
+  mediaContentType: string;
+  altText: string;
+  headline: string | null;
+  caption: string | null;
+  detailTitle: string;
+  detailBody: string;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  /** Video only, and muted whatever this says — there is no field that could turn sound on. */
+  autoplay: boolean;
+  loopMedia: boolean;
+  dismissible: boolean;
+}
+
+/** The same advert as its owner sees it: the schedule, the counters, and whether it is on air. */
+export interface AdminAd extends Ad {
+  title: string;
+  mediaFileName: string;
+  mediaSizeBytes: number;
+  active: boolean;
+  /** Computed server-side: active *and* inside its window. Active alone does not mean running. */
+  live: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  displayOrder: number;
+  viewCount: number;
+  clickCount: number;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

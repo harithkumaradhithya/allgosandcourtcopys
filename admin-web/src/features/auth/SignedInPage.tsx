@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { AdSlot } from '@/features/ads/AdSlot';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import {
   fetchDepartments,
@@ -165,6 +166,10 @@ export function SignedInPage() {
             <Row label="Email" value={user.email ?? '—'} />
           </dl>
         </section>
+
+        {/* Last on the screen, below the reader's own work — never above it, and never between two
+            things they came here to use. Renders nothing at all when no advert is running. */}
+        <AdSlot placement="HOME" />
       </div>
 
       {/* Fixed to the viewport rather than the page: Home can grow taller than the screen, and the

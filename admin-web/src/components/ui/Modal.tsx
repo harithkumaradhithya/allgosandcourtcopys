@@ -1,5 +1,28 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
+
+/*
+ * A prop rather than a className, for the same reason `Button` sizes are: `max-w-md` and `max-w-2xl`
+ * are the same utility family, so which one won would depend on their order in the generated
+ * stylesheet rather than on the call site.
+ *
+ * `md` is a decision — a confirmation, a short form. `lg` is for a dialog that has something to
+ * show as well as something to ask, where the media would be a postage stamp at `md`.
+ */
+const widths = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+};
+
+/*
+ * Only `lg` scrolls inside itself. An `md` dialog is short enough not to need it, and clipping its
+ * overflow would cut off the combobox listings that hang out of two of them.
+ */
+const scroll = {
+  md: '',
+  lg: 'max-h-[calc(100vh-2rem)] overflow-y-auto',
+};
 
 /**
  * A small dialog for decisions that need a second thought — rejecting a registration, deleting a
@@ -22,12 +45,14 @@ export function Modal({
   open,
   title,
   description,
+  size = 'md',
   onClose,
   children,
 }: {
   open: boolean;
   title: string;
   description?: string;
+  size?: keyof typeof widths;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -40,7 +65,14 @@ export function Modal({
   // down and rebuilding the focus trap mid-type, which yanks focus off whatever the user is typing
   // into and back onto the first focusable control in the panel.
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+
+  // Kept up to date in an effect rather than assigned in the render body. Writing a ref during
+  // render is a rule React itself warns about — under a concurrent render that is thrown away, the
+  // ref would keep the discarded pass's closure. An effect with no dependency array runs after every
+  // committed render, which is well before any key the handler below could be reacting to.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +124,17 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  /*
+   * Rendered into `document.body` rather than where it was written.
+   *
+   * `position: fixed` means "relative to the viewport" only while no ancestor carries a transform,
+   * a filter or a backdrop-filter — any one of those makes that ancestor the containing block
+   * instead, and the dialog is then sized and clipped to whatever element it happens to sit inside.
+   * The navigation rail is exactly such an ancestor: it slides in and out on a translate, so a
+   * dialog opened from inside it would be pinned to a 17rem column and cut off by its
+   * `overflow-hidden`. A portal takes the question away from every caller for good.
+   */
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="animate-fade absolute inset-0 bg-scrim backdrop-blur-[2px]"
@@ -104,8 +146,8 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="animate-pop relative w-full max-w-md rounded-2xl border border-line bg-surface
-          p-6 shadow-dialog"
+        className={`animate-pop relative w-full rounded-2xl border border-line bg-surface p-6
+          shadow-dialog ${widths[size]} ${scroll[size]}`}
       >
         <h2 className="pr-8 text-lg font-semibold text-slate-900">{title}</h2>
         {description && <p className="mt-1 pr-8 text-sm leading-relaxed text-slate-500">{description}</p>}
@@ -137,6 +179,7 @@ export function Modal({
           </svg>
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -28,6 +28,14 @@ maintain the templates; a letter belongs to whoever wrote it and nobody else can
 subject and body can be **dictated** in Tamil or Indian English on Chrome and Edge; note that those
 browsers recognise speech by sending the audio to the browser vendor, not on the machine.
 
+**Adverts:** the office can carry a picture, an animated GIF or a short video in three places —
+low on Home, under the department grid, and at the foot of the navigation rail. Administrators
+configure everything: the media, the headline and caption on the card, the heading and text of the
+popup that opens when it is pressed, an optional button to an external site, when it runs and in
+what order. They are built to stay out of the way: nothing opens on its own, nothing ever makes a
+sound, a reader can put one away for a fortnight, one advert shows at a time, each is labelled as an
+advertisement, none of them prints, and with nothing configured the slots do not exist at all.
+
 | | Member | Admin |
 |---|---|---|
 | View & download any department | ✅ | ✅ |
@@ -36,6 +44,7 @@ browsers recognise speech by sending the audio to the browser vendor, not on the
 | Delete anyone's file | — | ✅ |
 | Approve/reject registrations | — | ✅ |
 | Manage departments & folders | — | ✅ |
+| Manage adverts | — | ✅ |
 | Monitor all member activity, reports, audit logs | — | ✅ |
 
 **Login:** mobile number is the identity and the password is the credential. Five wrong passwords lock
@@ -59,7 +68,7 @@ There is no mobile app. `admin-web/` is a single responsive SPA that serves both
 ```
 backend/            Spring Boot API
   src/main/java/com/allgos/dms/
-    auth/ user/ department/ folder/ file/ notification/ audit/ report/ common/
+    auth/ user/ department/ folder/ file/ letter/ phonebook/ ad/ notification/ audit/ report/ common/
     (each with controller / service / repository / entity / dto)
   src/main/resources/db/migration/   Flyway: schema + 43-department seed + first admin
 admin-web/          React SPA (Admin + Member)

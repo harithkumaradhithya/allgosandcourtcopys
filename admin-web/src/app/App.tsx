@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AdminDashboardPage } from '@/features/admin/AdminDashboardPage';
 import { AuditLogPage } from '@/features/admin/audit/AuditLogPage';
+import { AdsPage } from '@/features/ads/admin/AdsPage';
 import { DeletionsPage } from '@/features/admin/deletions/DeletionsPage';
 import { MemberActivityPage } from '@/features/admin/members/MemberActivityPage';
 import { MembersPage } from '@/features/admin/members/MembersPage';
@@ -101,6 +102,7 @@ export function App() {
           <Route path="/admin/deletions" element={<DeletionsPage />} />
           <Route path="/admin/reports" element={<ReportsPage />} />
           <Route path="/admin/logs" element={<AuditLogPage />} />
+          <Route path="/admin/ads" element={<AdsPage />} />
           {/* Departments and folders are managed where they are browsed, so these older routes
               lead there rather than to a screen that would duplicate it. */}
           <Route path="/admin/departments" element={<Navigate to="/departments" replace />} />
