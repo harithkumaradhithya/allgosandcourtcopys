@@ -42,12 +42,24 @@ public class Letter extends BaseEntity {
     @Column(nullable = false)
     private LetterLanguage language = LetterLanguage.EN;
 
+    /** The office letter shape, the shorter third-person memo, or a Government Order. */
+    @Column(nullable = false)
+    private LetterFormat format = LetterFormat.LETTER;
+
+    /** Which classification a G.O. was issued under (Ms/Rt/Pt/1D). Null on anything but a G.O. */
+    @Column(name = "go_type")
+    private LetterGoType goType;
+
     /** A draft is a letter still being written; it is exempt from the blocks below being filled. */
     @Column(nullable = false)
     private LetterStatus status = LetterStatus.FINAL;
 
     @Column(name = "from_block", nullable = false, columnDefinition = "text")
     private String fromBlock;
+
+    /** The office's own name, place, phone and e-mail, printed opposite the From block on a D.O. letter. */
+    @Column(name = "office_block", columnDefinition = "text")
+    private String officeBlock;
 
     @Column(name = "to_block", nullable = false, columnDefinition = "text")
     private String toBlock;
@@ -74,4 +86,8 @@ public class Letter extends BaseEntity {
     /** What sits above the signature: the name, the post, and who it is signed for. */
     @Column(name = "sign_off", columnDefinition = "text")
     private String signOff;
+
+    /** A table of figures dropped into the body, JSON-encoded as rows of cells. Null when there is none. */
+    @Column(name = "table_data", columnDefinition = "text")
+    private String tableData;
 }

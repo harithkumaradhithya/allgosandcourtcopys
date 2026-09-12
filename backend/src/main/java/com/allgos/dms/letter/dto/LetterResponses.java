@@ -1,6 +1,8 @@
 package com.allgos.dms.letter.dto;
 
 import com.allgos.dms.letter.entity.Letter;
+import com.allgos.dms.letter.entity.LetterFormat;
+import com.allgos.dms.letter.entity.LetterGoType;
 import com.allgos.dms.letter.entity.LetterLanguage;
 import com.allgos.dms.letter.entity.LetterStatus;
 import java.time.Instant;
@@ -21,8 +23,11 @@ public final class LetterResponses {
             String referenceNo,
             LocalDate letterDate,
             LetterLanguage language,
+            LetterFormat format,
+            LetterGoType goType,
             LetterStatus status,
             String fromBlock,
+            String officeBlock,
             String toBlock,
             String salutation,
             String subject,
@@ -31,6 +36,7 @@ public final class LetterResponses {
             String enclosure,
             String copyTo,
             String signOff,
+            String tableData,
             Instant createdAt,
             Instant updatedAt) {
 
@@ -40,8 +46,11 @@ public final class LetterResponses {
                     letter.getReferenceNo(),
                     letter.getLetterDate(),
                     letter.getLanguage(),
+                    letter.getFormat(),
+                    letter.getGoType(),
                     letter.getStatus(),
                     letter.getFromBlock(),
+                    letter.getOfficeBlock(),
                     letter.getToBlock(),
                     letter.getSalutation(),
                     letter.getSubject(),
@@ -50,6 +59,7 @@ public final class LetterResponses {
                     letter.getEnclosure(),
                     letter.getCopyTo(),
                     letter.getSignOff(),
+                    letter.getTableData(),
                     letter.getCreatedAt(),
                     letter.getUpdatedAt());
         }
@@ -67,6 +77,7 @@ public final class LetterResponses {
             LocalDate letterDate,
             String subject,
             LetterLanguage language,
+            LetterFormat format,
             LetterStatus status,
             Instant updatedAt) {
 
@@ -77,6 +88,7 @@ public final class LetterResponses {
                     letter.getLetterDate(),
                     letter.getSubject(),
                     letter.getLanguage(),
+                    letter.getFormat(),
                     letter.getStatus(),
                     letter.getUpdatedAt());
         }

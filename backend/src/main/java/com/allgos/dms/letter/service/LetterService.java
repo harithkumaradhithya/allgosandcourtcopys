@@ -8,6 +8,8 @@ import com.allgos.dms.letter.dto.LetterRequests;
 import com.allgos.dms.letter.dto.LetterResponses.LetterSummary;
 import com.allgos.dms.letter.dto.LetterResponses.LetterView;
 import com.allgos.dms.letter.entity.Letter;
+import com.allgos.dms.letter.entity.LetterFormat;
+import com.allgos.dms.letter.entity.LetterGoType;
 import com.allgos.dms.letter.entity.LetterLanguage;
 import com.allgos.dms.letter.entity.LetterStatus;
 import com.allgos.dms.letter.repository.LetterRepository;
@@ -153,9 +155,13 @@ public class LetterService {
     private void apply(Letter letter, LetterRequests.SaveLetter request) {
         letter.setStatus(LetterStatus.FINAL);
         letter.setLanguage(language(request.language()));
+        LetterFormat resolvedFormat = format(request.format());
+        letter.setFormat(resolvedFormat);
+        letter.setGoType(goType(resolvedFormat, request.goType()));
         letter.setReferenceNo(trimToNull(request.referenceNo()));
         letter.setLetterDate(request.letterDate());
         letter.setFromBlock(request.fromBlock().trim());
+        letter.setOfficeBlock(trimToNull(request.officeBlock()));
         letter.setToBlock(request.toBlock().trim());
         letter.setSalutation(trimToNull(request.salutation()));
         letter.setSubject(request.subject().trim());
@@ -164,6 +170,7 @@ public class LetterService {
         letter.setEnclosure(trimToNull(request.enclosure()));
         letter.setCopyTo(trimToNull(request.copyTo()));
         letter.setSignOff(trimToNull(request.signOff()));
+        letter.setTableData(trimToNull(request.tableData()));
     }
 
     /**
@@ -176,9 +183,13 @@ public class LetterService {
     private void applyDraft(Letter letter, LetterRequests.SaveDraft request) {
         letter.setStatus(LetterStatus.DRAFT);
         letter.setLanguage(language(request.language()));
+        LetterFormat resolvedFormat = format(request.format());
+        letter.setFormat(resolvedFormat);
+        letter.setGoType(goType(resolvedFormat, request.goType()));
         letter.setReferenceNo(trimToNull(request.referenceNo()));
         letter.setLetterDate(request.letterDate());
         letter.setFromBlock(trimToEmpty(request.fromBlock()));
+        letter.setOfficeBlock(trimToNull(request.officeBlock()));
         letter.setToBlock(trimToEmpty(request.toBlock()));
         letter.setSalutation(trimToNull(request.salutation()));
         letter.setSubject(trimToEmpty(request.subject()));
@@ -187,11 +198,25 @@ public class LetterService {
         letter.setEnclosure(trimToNull(request.enclosure()));
         letter.setCopyTo(trimToNull(request.copyTo()));
         letter.setSignOff(trimToNull(request.signOff()));
+        letter.setTableData(trimToNull(request.tableData()));
     }
 
     /** English unless the caller says otherwise, which is what an older client sending nothing means. */
     private static LetterLanguage language(LetterLanguage requested) {
         return requested == null ? LetterLanguage.EN : requested;
+    }
+
+    /** The office letter shape unless the caller says otherwise. */
+    private static LetterFormat format(LetterFormat requested) {
+        return requested == null ? LetterFormat.LETTER : requested;
+    }
+
+    /** A G.O. defaults to the Ms classification unless another was chosen; every other format carries none. */
+    private static LetterGoType goType(LetterFormat format, LetterGoType requested) {
+        if (format != LetterFormat.GO) {
+            return null;
+        }
+        return requested == null ? LetterGoType.MS : requested;
     }
 
     private static String trimToEmpty(String value) {

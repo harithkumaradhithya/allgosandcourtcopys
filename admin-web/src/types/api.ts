@@ -383,7 +383,6 @@ export interface ApiError {
   fieldErrors?: Record<string, string>;
 }
 
-/** A kind of letter, with the wording it starts from. Maintained by administrators. */
 /**
  * Which language a letter is written and printed in.
  *
@@ -391,6 +390,25 @@ export interface ApiError {
  * prints, so it is stored with the letter and travels with it to the printer.
  */
 export type LetterLanguage = 'EN' | 'TA';
+
+/**
+ * The structure a letter is drafted in.
+ *
+ * <p>`LETTER` is the office's own correspondence shape — a salutation, addressed to a recipient.
+ * `MEMO` ("குறிப்பாணை") is the shorter, third-person form issued to a subordinate office or about
+ * somebody's petition — no salutation. `GO` ("அரசாணை") is a Government Order, issued only by the
+ * Secretariat, with an abstract, a "படிக்கப்பட்டவை" (Read) clause and an order signed by order of the
+ * Governor. `DO` ("நேர்முகக் கடிதம்") is a Demi-Official letter — personal-cum-official correspondence
+ * between officers, written in the first person and signed "Yours sincerely" rather than issued.
+ * Stored with the letter for the same reason the language is.
+ */
+export type LetterFormat = 'LETTER' | 'MEMO' | 'GO' | 'DO';
+
+/**
+ * The classification a Government Order is issued under, printed in brackets before its number —
+ * "அரசாணை (நிலை) எண்" / "G.O. (Ms). No.". Meaningless outside a `GO` letter, on which it is null.
+ */
+export type LetterGoType = 'MS' | 'RT' | 'PT' | 'ONE_D';
 
 /** A letter still being written, or one its author has finished. */
 export type LetterStatus = 'DRAFT' | 'FINAL';
@@ -406,8 +424,12 @@ export interface Letter {
   referenceNo: string | null;
   letterDate: string | null;
   language: LetterLanguage;
+  format: LetterFormat;
+  goType: LetterGoType | null;
   status: LetterStatus;
   fromBlock: string;
+  /** The office's own name, place, phone and e-mail, printed opposite the From block. Meaningless outside a D.O. letter. */
+  officeBlock: string | null;
   toBlock: string;
   salutation: string | null;
   subject: string;
@@ -416,6 +438,8 @@ export interface Letter {
   enclosure: string | null;
   copyTo: string | null;
   signOff: string | null;
+  /** A table dropped into the body, JSON-encoded as rows of cells. Null when the letter carries none. */
+  tableData: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -427,6 +451,7 @@ export interface LetterSummary {
   letterDate: string | null;
   subject: string;
   language: LetterLanguage;
+  format: LetterFormat;
   status: LetterStatus;
   updatedAt: string;
 }

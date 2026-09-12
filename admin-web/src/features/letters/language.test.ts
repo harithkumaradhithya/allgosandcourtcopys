@@ -11,7 +11,7 @@ describe('the two languages a letter can be written in', () => {
   it('prints Tamil headings on a Tamil letter, not English ones with Tamil text under them', () => {
     const tamil = LETTER_TEXT.TA.sheet;
 
-    expect(tamil.from).toBe('அனுப்புநர்,');
+    expect(tamil.from).toBe('விடுநர்,');
     expect(tamil.to).toBe('பெறுநர்,');
     expect(tamil.subject).toBe('பொருள்:');
     expect(tamil.reference).toBe('பார்வை:');
@@ -63,6 +63,6 @@ describe('the two languages a letter can be written in', () => {
   it('falls back to English rather than to nothing', () => {
     expect(letterText(null).sheet.from).toBe('From,');
     expect(letterText(undefined).sheet.from).toBe('From,');
-    expect(letterText('TA').sheet.from).toBe('அனுப்புநர்,');
+    expect(letterText('TA').sheet.from).toBe('விடுநர்,');
   });
 });

@@ -15,9 +15,12 @@ const SOMEBODY_ELSE = 'user-2';
 
 const BLANK: LetterDraft = {
   language: 'EN',
+  format: 'LETTER',
+  goType: null,
   referenceNo: '',
   letterDate: '',
   fromBlock: '',
+  officeBlock: '',
   toBlock: '',
   salutation: '',
   subject: '',
@@ -26,6 +29,7 @@ const BLANK: LetterDraft = {
   enclosure: '',
   copyTo: '',
   signOff: '',
+  tableData: '',
 };
 
 const HALF_WRITTEN: LetterDraft = {

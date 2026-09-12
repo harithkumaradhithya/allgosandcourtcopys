@@ -17,19 +17,35 @@ import {
   type LocalDraft,
 } from '@/features/letters/draft-storage';
 import { defaultFromBlock, todayIso } from '@/features/letters/format';
-import { DICTATION_FOR, LETTER_LANGUAGES, LETTER_TEXT, letterText } from '@/features/letters/language';
+import {
+  DICTATION_FOR,
+  DO_HIERARCHIES,
+  DO_SALUTATIONS,
+  GO_TYPES,
+  LETTER_FORMATS,
+  LETTER_LANGUAGES,
+  LETTER_TEXT,
+  doText,
+  goText,
+  letterText,
+  memoText,
+  type DoHierarchy,
+} from '@/features/letters/language';
 import { useLetterAutosave, type AutosaveState } from '@/features/letters/useAutosave';
 import { useAuth } from '@/lib/auth-context';
 import { useDictationLanguage } from '@/lib/dictation';
 import { toApiError } from '@/lib/errors';
 import { formatTime } from '@/lib/format';
-import type { Letter, LetterLanguage } from '@/types/api';
+import type { Letter, LetterFormat, LetterGoType, LetterLanguage } from '@/types/api';
 
 const EMPTY: LetterDraft = {
   language: 'EN',
+  format: 'LETTER',
+  goType: null,
   referenceNo: '',
   letterDate: '',
   fromBlock: '',
+  officeBlock: '',
   toBlock: '',
   salutation: '',
   subject: '',
@@ -38,6 +54,7 @@ const EMPTY: LetterDraft = {
   enclosure: '',
   copyTo: '',
   signOff: '',
+  tableData: '',
 };
 
 /**
@@ -67,6 +84,7 @@ export function LetterEditorPage() {
 
   const isNew = letterId === undefined;
   const requestedLanguage = asLanguage(searchParams.get('lang'));
+  const requestedFormat = asFormat(searchParams.get('format'));
 
   /**
    * Only what the writer has actually changed; everything else is derived below. Keeping the whole
@@ -97,9 +115,12 @@ export function LetterEditorPage() {
     if (letter) {
       return {
         language: letter.language,
+        format: letter.format,
+        goType: letter.goType,
         referenceNo: letter.referenceNo ?? '',
         letterDate: letter.letterDate ?? '',
         fromBlock: letter.fromBlock,
+        officeBlock: letter.officeBlock ?? '',
         toBlock: letter.toBlock,
         salutation: letter.salutation ?? '',
         subject: letter.subject,
@@ -108,27 +129,47 @@ export function LetterEditorPage() {
         enclosure: letter.enclosure ?? '',
         copyTo: letter.copyTo ?? '',
         signOff: letter.signOff ?? '',
+        tableData: letter.tableData ?? '',
       };
     }
 
     if (!isNew || !user) return EMPTY;
 
     const language = requestedLanguage ?? 'EN';
+    const format = requestedFormat ?? 'LETTER';
 
     return {
       ...EMPTY,
       language,
+      format,
+      // A G.O. defaults to the Ms classification, the commonest one, until its author says otherwise.
+      goType: format === 'GO' ? 'MS' : null,
       letterDate: todayIso(),
       fromBlock: defaultFromBlock(user),
-      salutation: LETTER_TEXT[language].defaultSalutation,
+      // A D.O.'s office block is a shorter version of the same address the From block is seeded
+      // from — just what identifies the office, not the writer's own name and post again.
+      officeBlock: format === 'DO' ? (user.officeAddress ?? '') : '',
+      // A memo or a G.O. has no salutation — both are written about the recipient, not to them. A
+      // D.O.'s salutation depends on who it is going to, which nothing here knows yet — the
+      // hierarchy picker in its own form section fills this in once the writer says.
+      salutation:
+        format === 'MEMO' || format === 'GO' || format === 'DO'
+          ? ''
+          : LETTER_TEXT[language].defaultSalutation,
       signOff: [user.fullName, user.designation].filter(Boolean).join('\n'),
     };
-  }, [existing.data, isNew, user, requestedLanguage]);
+  }, [existing.data, isNew, user, requestedLanguage, requestedFormat]);
 
   /** What the form shows: the writer's edits if there are any, otherwise the seed. */
   const draft = edited ?? seeded;
+  const isMemo = draft.format === 'MEMO';
+  const isGo = draft.format === 'GO';
+  const isDo = draft.format === 'DO';
   const text = letterText(draft.language);
   const labels = text.form;
+  const memo = memoText(draft.language);
+  const go = goText(draft.language);
+  const doLetter = doText(draft.language);
 
   const ready = isNew ? user !== null : existing.isSuccess;
 
@@ -216,6 +257,23 @@ export function LetterEditorPage() {
 
     setEdited((current) => {
       const from = current ?? seeded;
+
+      // A memo or a G.O. carries no salutation to begin with, so there is nothing here to follow it.
+      if (from.format === 'MEMO' || from.format === 'GO') return { ...from, language };
+
+      // A D.O.'s salutation follows its own stock phrases (by hierarchy), not a letter's single
+      // default — the same idea as below, applied to the four the hierarchy picker offers.
+      if (from.format === 'DO') {
+        const stockEntry = (Object.entries(DO_SALUTATIONS[from.language]) as [DoHierarchy, string][]).find(
+          ([, phrase]) => phrase === from.salutation.trim(),
+        );
+        return {
+          ...from,
+          language,
+          salutation: stockEntry ? DO_SALUTATIONS[language][stockEntry[0]] : from.salutation,
+        };
+      }
+
       const stock = Object.values(LETTER_TEXT).some(
         (candidate) => candidate.defaultSalutation === from.salutation.trim(),
       );
@@ -232,6 +290,44 @@ export function LetterEditorPage() {
     setSaved(false);
   };
 
+  /**
+   * Switching a letter between the office letter shape, a memo and a Government Order.
+   *
+   * <p>Nothing typed is thrown away: the same blocks (office/department, recipient, subject/abstract,
+   * reference/read, body, signing officer) mean something in all three shapes, so switching back and
+   * forth loses nothing but a salutation neither a memo nor a G.O. prints in the first place. A G.O.
+   * type is seeded to Ms the first time a letter becomes one, so the picker never opens on nothing
+   * selected, but a type chosen earlier is remembered if the writer switches away and back.
+   */
+  const switchFormat = (format: LetterFormat) => {
+    if (format === draft.format) return;
+    setEdited((current) => {
+      const from = current ?? seeded;
+      return { ...from, format, goType: format === 'GO' ? (from.goType ?? 'MS') : from.goType };
+    });
+    setSaved(false);
+  };
+
+  const setGoType = (goType: LetterGoType) => {
+    if (goType === draft.goType) return;
+    setEdited((current) => ({ ...(current ?? seeded), goType }));
+    setSaved(false);
+  };
+
+  /** Filling in a starting salutation for who the D.O. is going to — freely edited afterwards. */
+  const setDoHierarchy = (hierarchy: DoHierarchy) => {
+    set('salutation')(DO_SALUTATIONS[draft.language][hierarchy]);
+  };
+
+  const hasTable = draft.tableData.trim().length > 0;
+
+  /** A table starts as two rows of two blank cells — small enough to see the shape, not a page of them. */
+  const toggleTable = () => {
+    set('tableData')(hasTable ? '' : JSON.stringify([['', ''], ['', '']]));
+  };
+
+  const editTable = (rows: string[][]) => set('tableData')(JSON.stringify(rows));
+
   const complete =
     draft.fromBlock.trim() && draft.toBlock.trim() && draft.subject.trim() && draft.body.trim();
 
@@ -239,10 +335,13 @@ export function LetterEditorPage() {
   const preview: Letter = {
     id: letterId ?? 'preview',
     language: draft.language,
+    format: draft.format,
+    goType: draft.goType,
     status: existing.data?.status ?? 'DRAFT',
     referenceNo: draft.referenceNo || null,
     letterDate: draft.letterDate || null,
     fromBlock: draft.fromBlock,
+    officeBlock: draft.officeBlock || null,
     toBlock: draft.toBlock,
     salutation: draft.salutation || null,
     subject: draft.subject,
@@ -251,6 +350,7 @@ export function LetterEditorPage() {
     enclosure: draft.enclosure || null,
     copyTo: draft.copyTo || null,
     signOff: draft.signOff || null,
+    tableData: draft.tableData || null,
     createdAt: existing.data?.createdAt ?? '',
     updatedAt: existing.data?.updatedAt ?? '',
   };
@@ -267,6 +367,9 @@ export function LetterEditorPage() {
           <AutosaveBadge state={autosave.state} at={autosave.syncedAt} />
           <Button variant="secondary" onClick={() => navigate('/letters')}>
             Back
+          </Button>
+          <Button variant="secondary" onClick={toggleTable}>
+            {hasTable ? 'Remove table' : '+ Add table'}
           </Button>
           {/* Printing is the browser's own dialogue, which is also where Save as PDF lives. Nothing
               is generated on the server, so what prints is exactly what is on screen. */}
@@ -320,6 +423,33 @@ export function LetterEditorPage() {
         {/* The form is hidden when printing; only the sheet goes on the paper. */}
         <section data-testid="letter-form" className="space-y-4 print:hidden">
           <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+            <h2 className="font-semibold text-slate-900">Format</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              A letter is addressed with a salutation. A memo is shorter, has none, and is written in
+              the third person.
+            </p>
+            <div className="mt-3 flex gap-2" role="group" aria-label="Letter format">
+              {LETTER_FORMATS.map((option) => (
+                <button
+                  key={option.code}
+                  type="button"
+                  aria-pressed={draft.format === option.code}
+                  onClick={() => switchFormat(option.code)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold outline-none
+                    transition-[background-color,color,box-shadow] duration-[--duration-quick]
+                    focus-visible:ring-2 focus-visible:ring-navy-300 ${
+                      draft.format === option.code
+                        ? 'bg-navy-600 text-white'
+                        : 'bg-surface-sunken text-slate-600 hover:bg-navy-50'
+                    }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
             <h2 className="font-semibold text-slate-900">Language</h2>
             <p className="mt-1 text-sm text-slate-500">
               An English letter prints English headings; a Tamil letter prints Tamil ones. What you
@@ -346,106 +476,404 @@ export function LetterEditorPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
-            <h2 className="font-semibold text-slate-900">{labels.headingSection}</h2>
-            <div className="mt-4 space-y-4">
-              <TextField
-                label={labels.referenceNo}
-                value={draft.referenceNo}
-                onChange={(event) => set('referenceNo')(event.target.value)}
-                placeholder="DBC/52/2026-D3"
-                hint={labels.referenceNoHint}
-              />
-              <TextField
-                label={labels.date}
-                type="date"
-                value={draft.letterDate}
-                onChange={(event) => set('letterDate')(event.target.value)}
-              />
-              <DictationField
-                label={labels.from}
-                rows={5}
-                value={draft.fromBlock}
-                onValueChange={set('fromBlock')}
-                hint={labels.fromHint}
-              />
-              <DictationField
-                label={labels.to}
-                rows={6}
-                value={draft.toBlock}
-                onValueChange={set('toBlock')}
-                placeholder={labels.toPlaceholder}
-                hint={labels.toHint}
-              />
-            </div>
-          </div>
+          {isMemo ? (
+            <>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{memo.form.headingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <TextField
+                    label={memo.form.referenceNo}
+                    value={draft.referenceNo}
+                    onChange={(event) => set('referenceNo')(event.target.value)}
+                    placeholder="DBC/52/2026-D3"
+                    hint={memo.form.referenceNoHint}
+                  />
+                  <TextField
+                    label={memo.form.date}
+                    type="date"
+                    value={draft.letterDate}
+                    onChange={(event) => set('letterDate')(event.target.value)}
+                  />
+                  <DictationField
+                    label={memo.form.office}
+                    rows={5}
+                    value={draft.fromBlock}
+                    onValueChange={set('fromBlock')}
+                    hint={memo.form.officeHint}
+                  />
+                  <DictationField
+                    label={memo.form.recipient}
+                    rows={4}
+                    value={draft.toBlock}
+                    onValueChange={set('toBlock')}
+                    placeholder={memo.form.recipientPlaceholder}
+                    hint={memo.form.recipientHint}
+                  />
+                </div>
+              </div>
 
-          <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
-            <h2 className="font-semibold text-slate-900">{labels.letterSection}</h2>
-            <div className="mt-4 space-y-4">
-              <TextField
-                label={labels.salutation}
-                value={draft.salutation}
-                onChange={(event) => set('salutation')(event.target.value)}
-                placeholder={text.defaultSalutation}
-              />
-              <DictationField
-                label={labels.subject}
-                rows={3}
-                value={draft.subject}
-                onValueChange={set('subject')}
-                hint={labels.subjectHint}
-              />
-              <DictationField
-                label={labels.reference}
-                rows={2}
-                value={draft.reference}
-                onValueChange={set('reference')}
-                hint={labels.referenceHint}
-              />
-              <DictationField
-                label={labels.body}
-                rows={12}
-                value={draft.body}
-                onValueChange={set('body')}
-                hint={labels.bodyHint}
-              />
-            </div>
-          </div>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{memo.form.bodySection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={memo.form.subject}
+                    rows={3}
+                    value={draft.subject}
+                    onValueChange={set('subject')}
+                    hint={memo.form.subjectHint}
+                  />
+                  <DictationField
+                    label={memo.form.reference}
+                    rows={2}
+                    value={draft.reference}
+                    onValueChange={set('reference')}
+                    hint={memo.form.referenceHint}
+                  />
+                  <DictationField
+                    label={memo.form.body}
+                    rows={12}
+                    value={draft.body}
+                    onValueChange={set('body')}
+                    hint={memo.form.bodyHint}
+                  />
+                </div>
+              </div>
 
-          <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
-            <h2 className="font-semibold text-slate-900">{labels.closingSection}</h2>
-            <div className="mt-4 space-y-4">
-              <DictationField
-                label={labels.enclosure}
-                singleLine
-                value={draft.enclosure}
-                onValueChange={set('enclosure')}
-                placeholder={labels.enclosurePlaceholder}
-              />
-              <DictationField
-                label={labels.signOff}
-                rows={4}
-                value={draft.signOff}
-                onValueChange={set('signOff')}
-                hint={labels.signOffHint}
-              />
-              <DictationField
-                label={labels.copyTo}
-                rows={4}
-                value={draft.copyTo}
-                onValueChange={set('copyTo')}
-                hint={labels.copyToHint}
-              />
-            </div>
-          </div>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{memo.form.closingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={memo.form.designation}
+                    rows={4}
+                    value={draft.signOff}
+                    onValueChange={set('signOff')}
+                    hint={memo.form.designationHint}
+                  />
+                </div>
+              </div>
+            </>
+          ) : isGo ? (
+            <>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{go.form.headingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">
+                      {go.form.goType}
+                    </span>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="G.O. type">
+                      {GO_TYPES.map((option) => (
+                        <button
+                          key={option.code}
+                          type="button"
+                          aria-pressed={draft.goType === option.code}
+                          onClick={() => setGoType(option.code)}
+                          title={go.goTypeLabel[option.code]}
+                          className={`rounded-lg px-3 py-1.5 text-sm font-semibold outline-none
+                            transition-[background-color,color,box-shadow]
+                            duration-[--duration-quick] focus-visible:ring-2
+                            focus-visible:ring-navy-300 ${
+                              draft.goType === option.code
+                                ? 'bg-navy-600 text-white'
+                                : 'bg-surface-sunken text-slate-600 hover:bg-navy-50'
+                            }`}
+                        >
+                          {option.short}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <TextField
+                    label={go.form.goNumber}
+                    value={draft.referenceNo}
+                    onChange={(event) => set('referenceNo')(event.target.value)}
+                    placeholder="1415"
+                    hint={go.form.goNumberHint}
+                  />
+                  <TextField
+                    label={go.form.date}
+                    type="date"
+                    value={draft.letterDate}
+                    onChange={(event) => set('letterDate')(event.target.value)}
+                  />
+                  <DictationField
+                    label={go.form.department}
+                    rows={2}
+                    value={draft.fromBlock}
+                    onValueChange={set('fromBlock')}
+                    hint={go.form.departmentHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{go.form.abstractSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={go.form.abstract}
+                    rows={3}
+                    value={draft.subject}
+                    onValueChange={set('subject')}
+                    hint={go.form.abstractHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{go.form.bodySection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={go.form.body}
+                    rows={12}
+                    value={draft.body}
+                    onValueChange={set('body')}
+                    hint={go.form.bodyHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{go.form.closingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={go.form.designation}
+                    rows={3}
+                    value={draft.signOff}
+                    onValueChange={set('signOff')}
+                    hint={go.form.designationHint}
+                  />
+                  <DictationField
+                    label={go.form.recipients}
+                    rows={4}
+                    value={draft.toBlock}
+                    onValueChange={set('toBlock')}
+                    placeholder={go.placeholders.recipients}
+                    hint={go.form.recipientsHint}
+                  />
+                  <DictationField
+                    label={go.form.copyTo}
+                    rows={4}
+                    value={draft.copyTo}
+                    onValueChange={set('copyTo')}
+                    hint={go.form.copyToHint}
+                  />
+                </div>
+              </div>
+            </>
+          ) : isDo ? (
+            <>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{doLetter.form.headingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <TextField
+                    label={doLetter.form.doNumber}
+                    value={draft.referenceNo}
+                    onChange={(event) => set('referenceNo')(event.target.value)}
+                    placeholder="அ-3/72/2026"
+                    hint={doLetter.form.doNumberHint}
+                  />
+                  <TextField
+                    label={doLetter.form.date}
+                    type="date"
+                    value={draft.letterDate}
+                    onChange={(event) => set('letterDate')(event.target.value)}
+                  />
+                  <DictationField
+                    label={doLetter.form.sender}
+                    rows={3}
+                    value={draft.fromBlock}
+                    onValueChange={set('fromBlock')}
+                    hint={doLetter.form.senderHint}
+                  />
+                  <DictationField
+                    label={doLetter.form.office}
+                    rows={3}
+                    value={draft.officeBlock}
+                    onValueChange={set('officeBlock')}
+                    hint={doLetter.form.officeHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{doLetter.form.letterSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">
+                      {doLetter.form.hierarchy}
+                    </span>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label={doLetter.form.hierarchy}>
+                      {DO_HIERARCHIES.map((option) => (
+                        <button
+                          key={option.code}
+                          type="button"
+                          onClick={() => setDoHierarchy(option.code)}
+                          className="rounded-lg bg-surface-sunken px-3 py-1.5 text-sm font-semibold
+                            text-slate-600 outline-none transition-[background-color,color,box-shadow]
+                            duration-[--duration-quick] hover:bg-navy-50 focus-visible:ring-2
+                            focus-visible:ring-navy-300"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">{doLetter.form.hierarchyHint}</p>
+                  </div>
+                  <TextField
+                    label={doLetter.form.salutation}
+                    value={draft.salutation}
+                    onChange={(event) => set('salutation')(event.target.value)}
+                    placeholder={doLetter.placeholders.salutation}
+                  />
+                  <DictationField
+                    label={doLetter.form.subject}
+                    rows={3}
+                    value={draft.subject}
+                    onValueChange={set('subject')}
+                    hint={doLetter.form.subjectHint}
+                  />
+                  <DictationField
+                    label={doLetter.form.reference}
+                    rows={2}
+                    value={draft.reference}
+                    onValueChange={set('reference')}
+                    hint={doLetter.form.referenceHint}
+                  />
+                  <DictationField
+                    label={doLetter.form.body}
+                    rows={12}
+                    value={draft.body}
+                    onValueChange={set('body')}
+                    hint={doLetter.form.bodyHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{doLetter.form.closingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={doLetter.form.initials}
+                    rows={2}
+                    value={draft.signOff}
+                    onValueChange={set('signOff')}
+                    hint={doLetter.form.initialsHint}
+                  />
+                  <DictationField
+                    label={doLetter.form.recipient}
+                    rows={4}
+                    value={draft.toBlock}
+                    onValueChange={set('toBlock')}
+                    placeholder={doLetter.form.recipientPlaceholder}
+                    hint={doLetter.form.recipientHint}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{labels.headingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <TextField
+                    label={labels.referenceNo}
+                    value={draft.referenceNo}
+                    onChange={(event) => set('referenceNo')(event.target.value)}
+                    placeholder="DBC/52/2026-D3"
+                    hint={labels.referenceNoHint}
+                  />
+                  <TextField
+                    label={labels.date}
+                    type="date"
+                    value={draft.letterDate}
+                    onChange={(event) => set('letterDate')(event.target.value)}
+                  />
+                  <DictationField
+                    label={labels.from}
+                    rows={5}
+                    value={draft.fromBlock}
+                    onValueChange={set('fromBlock')}
+                    hint={labels.fromHint}
+                  />
+                  <DictationField
+                    label={labels.to}
+                    rows={6}
+                    value={draft.toBlock}
+                    onValueChange={set('toBlock')}
+                    placeholder={labels.toPlaceholder}
+                    hint={labels.toHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{labels.letterSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <TextField
+                    label={labels.salutation}
+                    value={draft.salutation}
+                    onChange={(event) => set('salutation')(event.target.value)}
+                    placeholder={text.defaultSalutation}
+                  />
+                  <DictationField
+                    label={labels.subject}
+                    rows={3}
+                    value={draft.subject}
+                    onValueChange={set('subject')}
+                    hint={labels.subjectHint}
+                  />
+                  <DictationField
+                    label={labels.reference}
+                    rows={2}
+                    value={draft.reference}
+                    onValueChange={set('reference')}
+                    hint={labels.referenceHint}
+                  />
+                  <DictationField
+                    label={labels.body}
+                    rows={12}
+                    value={draft.body}
+                    onValueChange={set('body')}
+                    hint={labels.bodyHint}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 className="font-semibold text-slate-900">{labels.closingSection}</h2>
+                <div className="mt-4 space-y-4">
+                  <DictationField
+                    label={labels.enclosure}
+                    singleLine
+                    value={draft.enclosure}
+                    onValueChange={set('enclosure')}
+                    placeholder={labels.enclosurePlaceholder}
+                  />
+                  <DictationField
+                    label={labels.signOff}
+                    rows={4}
+                    value={draft.signOff}
+                    onValueChange={set('signOff')}
+                    hint={labels.signOffHint}
+                  />
+                  <DictationField
+                    label={labels.copyTo}
+                    rows={4}
+                    value={draft.copyTo}
+                    onValueChange={set('copyTo')}
+                    hint={labels.copyToHint}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </section>
 
         <section data-testid="letter-preview" className="min-w-0 print:w-full">
           <p className="mb-3 text-xs uppercase tracking-wide text-slate-500 print:hidden">
             Preview — this is what prints, and you can type straight into it
           </p>
-          <LetterSheet letter={preview} onEdit={editInSheet} />
+          <LetterSheet letter={preview} onEdit={editInSheet} onTableChange={editTable} />
         </section>
       </div>
     </AppShell>
@@ -490,4 +918,9 @@ function AutosaveBadge({ state, at }: { state: AutosaveState; at: Date | null })
 /** A `?lang=` that is not one of the two is simply not an answer, and the seed decides instead. */
 function asLanguage(value: string | null): LetterLanguage | null {
   return value === 'EN' || value === 'TA' ? value : null;
+}
+
+/** A `?format=` that is not one of the four is simply not an answer, and the seed decides instead. */
+function asFormat(value: string | null): LetterFormat | null {
+  return value === 'LETTER' || value === 'MEMO' || value === 'GO' || value === 'DO' ? value : null;
 }

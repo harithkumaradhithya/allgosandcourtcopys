@@ -962,7 +962,8 @@ table th,
   header,
   footer,
   nav,
-  [role='dialog'] {
+  [role='dialog'],
+  [role='alert'] {
     display: none !important;
   }
 

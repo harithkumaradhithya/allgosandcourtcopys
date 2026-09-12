@@ -132,6 +132,7 @@ export function hasContent(draft: LetterDraft): boolean {
     draft.referenceNo,
     draft.enclosure,
     draft.copyTo,
+    draft.tableData,
   ].some((value) => value.trim().length > 0);
 }
 
